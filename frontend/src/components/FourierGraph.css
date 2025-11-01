@@ -1,0 +1,11 @@
+.fourier-graph {
+  width: 100%;
+}
+
+.fourier-canvas {
+  width: 100%;
+  height: 250px;
+  border-radius: 8px;
+  border: 1px solid rgba(125, 211, 252, 0.3);
+  background: rgba(15, 23, 42, 0.5);
+}

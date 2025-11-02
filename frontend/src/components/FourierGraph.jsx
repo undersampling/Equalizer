@@ -2,11 +2,25 @@
 import React, { useEffect, useRef } from 'react';
 import './FourierGraph.css';
 
-function FourierGraph({ fourierData, scale = 'linear', title = 'Fourier Transform' }) {
+function FourierGraph({ fourierData, scale = 'linear', title = 'Fourier Transform', isLoading, error }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
-    if (!fourierData || !canvasRef.current) return;
+    if (!fourierData || !canvasRef.current) {
+      console.log('FourierGraph: Missing data or canvas ref');
+      return;
+    }
+
+    // Validate data structure
+    if (!fourierData.frequencies || !fourierData.magnitudes) {
+      console.warn('FourierGraph: Invalid data structure', fourierData);
+      return;
+    }
+
+    if (fourierData.frequencies.length === 0 || fourierData.magnitudes.length === 0) {
+      console.warn('FourierGraph: Empty data arrays');
+      return;
+    }
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -26,8 +40,17 @@ function FourierGraph({ fourierData, scale = 'linear', title = 'Fourier Transfor
     const magnitudes = fourierData.magnitudes || [];
 
     if (frequencies.length === 0 || magnitudes.length === 0) {
+      console.warn('FourierGraph: Cannot draw - empty arrays');
       return;
     }
+
+    // Ensure arrays have the same length
+    const minLength = Math.min(frequencies.length, magnitudes.length);
+    const frequencies_trimmed = frequencies.slice(0, minLength);
+    const magnitudes_trimmed = magnitudes.slice(0, minLength);
+
+    // ... rest of your existing drawFFTGraph code ...
+    // (keep all the existing drawing code, but use frequencies_trimmed and magnitudes_trimmed)
 
     // Drawing parameters
     const padding = 40;
@@ -40,13 +63,13 @@ function FourierGraph({ fourierData, scale = 'linear', title = 'Fourier Transfor
     for (let i = 0; i <= 10; i++) {
       const x = padding + (graphWidth / 10) * i;
       const y = padding + (graphHeight / 10) * i;
-      
+
       // Vertical lines
       ctx.beginPath();
       ctx.moveTo(x, padding);
       ctx.lineTo(x, height - padding);
       ctx.stroke();
-      
+
       // Horizontal lines
       ctx.beginPath();
       ctx.moveTo(padding, y);
@@ -55,7 +78,8 @@ function FourierGraph({ fourierData, scale = 'linear', title = 'Fourier Transfor
     }
 
     // Calculate max magnitude
-    let maxMagnitude = Math.max(...magnitudes);
+    let maxMagnitude = Math.max(...magnitudes_trimmed);
+    if (maxMagnitude === 0) maxMagnitude = 1; // Prevent division by zero
     if (scale === 'audiogram') {
       maxMagnitude = Math.log10(maxMagnitude + 1) * 20;
     }
@@ -67,16 +91,16 @@ function FourierGraph({ fourierData, scale = 'linear', title = 'Fourier Transfor
     ctx.lineJoin = 'round';
 
     ctx.beginPath();
-    for (let i = 0; i < frequencies.length; i++) {
-      const x = padding + (i / frequencies.length) * graphWidth;
-      let magnitude = magnitudes[i];
-      
+    for (let i = 0; i < frequencies_trimmed.length; i++) {
+      const x = padding + (i / frequencies_trimmed.length) * graphWidth;
+      let magnitude = magnitudes_trimmed[i];
+
       if (scale === 'audiogram') {
         magnitude = Math.log10(magnitude + 1) * 20;
       }
-      
+
       const y = height - padding - (magnitude / maxMagnitude) * graphHeight;
-      
+
       if (i === 0) {
         ctx.moveTo(x, y);
       } else {
@@ -109,7 +133,8 @@ function FourierGraph({ fourierData, scale = 'linear', title = 'Fourier Transfor
     // X-axis labels
     for (let i = 0; i <= 5; i++) {
       const x = padding + (graphWidth / 5) * i;
-      const freq = (frequencies[Math.floor((i / 5) * frequencies.length)] || 0).toFixed(0);
+      const freqIdx = Math.floor((i / 5) * (frequencies_trimmed.length - 1));
+      const freq = (frequencies_trimmed[freqIdx] || 0).toFixed(0);
       ctx.fillText(freq + ' Hz', x, height - padding + 20);
     }
 
@@ -123,14 +148,60 @@ function FourierGraph({ fourierData, scale = 'linear', title = 'Fourier Transfor
   };
 
   return (
-    <div className="fourier-graph">
+    <div className="fourier-graph" style={{ position: 'relative' }}>
       <h3 className="fourier-graph-title">{title}</h3>
-      <canvas
-        ref={canvasRef}
-        width={900}
-        height={350}
-        className="fourier-graph-canvas"
-      />
+      <div style={{ position: 'relative' }}>
+        <canvas
+          ref={canvasRef}
+          width={900}
+          height={350}
+          className="fourier-graph-canvas"
+        />
+        {isLoading && (
+          <div style={{ 
+            color: '#94a3b8', 
+            padding: '20px', 
+            textAlign: 'center',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none'
+          }}>
+            Loading...
+          </div>
+        )}
+        {error && (
+          <div style={{ 
+            color: '#ef4444', 
+            padding: '20px', 
+            textAlign: 'center',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none',
+            fontSize: '14px',
+            maxWidth: '800px'
+          }}>
+            Error: {error}
+          </div>
+        )}
+        {!fourierData && !isLoading && !error && (
+          <div style={{ 
+            color: '#94a3b8', 
+            padding: '20px', 
+            textAlign: 'center',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none'
+          }}>
+            No data available
+          </div>
+        )}
+      </div>
     </div>
   );
 }

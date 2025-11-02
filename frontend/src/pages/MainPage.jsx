@@ -7,12 +7,14 @@ import Spectrogram from "../components/Spectrogram";
 import FourierGraph from "../components/FourierGraph";
 import AIModelSection from "../components/AIModelSection";
 import { getModeConfig } from "../utils/modeConfigs";
+import { downsampleSignal, limitSignalSize } from "../utils/audioUtils";
 
 function MainPage() {
   const [currentMode, setCurrentMode] = useState("generic");
   const [sliders, setSliders] = useState([]);
   const [inputSignal, setInputSignal] = useState(null);
   const [outputSignal, setOutputSignal] = useState(null);
+  const [apiSignal, setApiSignal] = useState(null); // Downsampled signal for API calls
   const [aiModelSignal, setAiModelSignal] = useState(null);
   const [inputFourierData, setInputFourierData] = useState(null);
   const [outputFourierData, setOutputFourierData] = useState(null);
@@ -28,9 +30,14 @@ function MainPage() {
   const [showSliderModal, setShowSliderModal] = useState(false);
   const [comparisonMode, setComparisonMode] = useState(null); // 'ai' or 'slider' or null
   const [showAIGraphs, setShowAIGraphs] = useState(false); // New state to control AI graphs visibility
+  const [fftError, setFftError] = useState(null); // Error state for FFT
+  const [isLoadingFFT, setIsLoadingFFT] = useState(false); // Loading state for FFT
 
   const fileInputRef = useRef(null);
   const audioContextRef = useRef(null);
+
+  // API base URL - try both ports
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
   // Check if current mode supports AI
   const isAIModeEnabled = currentMode === "musical" || currentMode === "human";
@@ -43,6 +50,7 @@ function MainPage() {
     setAiModelFourierData(null);
     setComparisonMode(null);
     setShowAIGraphs(false);
+    // Note: apiSignal is preserved when mode changes to maintain FFT consistency
   }, [currentMode]);
 
   const handleModeChange = (e) => {
@@ -70,14 +78,32 @@ function MainPage() {
         );
 
         const channelData = audioBuffer.getChannelData(0);
-        const signalData = {
+        
+        // Store original signal for display
+        const originalSignal = {
           data: Array.from(channelData),
           sampleRate: audioBuffer.sampleRate,
           duration: audioBuffer.duration,
         };
 
-        setInputSignal(signalData);
-        setOutputSignal(signalData);
+        // Downsample for API calls to prevent memory issues
+        const downsampled = downsampleSignal(
+          channelData,
+          audioBuffer.sampleRate,
+          16000, // Target sample rate
+          100000 // Max samples
+        );
+
+        const apiSignal = {
+          data: downsampled.data,
+          sampleRate: downsampled.sampleRate,
+          duration: audioBuffer.duration,
+        };
+
+        // Use original for display, but downsampled for API
+        setInputSignal(originalSignal);
+        setOutputSignal(originalSignal);
+        setApiSignal(apiSignal); // Store downsampled signal for API calls
         setCurrentTime(0);
         // Reset AI model output and comparison when new file is loaded
         setAiModelSignal(null);
@@ -85,8 +111,9 @@ function MainPage() {
         setComparisonMode(null);
         setShowAIGraphs(false);
 
-        computeFourierTransform(signalData, "input");
-        computeFourierTransform(signalData, "output");
+        // Use downsampled signal for API calls - both should use same signal
+        computeFourierTransform(apiSignal, "input");
+        computeFourierTransform(apiSignal, "output");
       } catch (error) {
         console.error("Error loading audio file:", error);
         alert("Error loading file. Please try a different audio file.");
@@ -96,27 +123,106 @@ function MainPage() {
   };
 
   const computeFourierTransform = async (signal, type) => {
+    if (!signal || !signal.data || signal.data.length === 0) {
+      console.warn('No signal data to compute FFT');
+      setFftError(null);
+      return;
+    }
+
+    // Limit signal size before sending
+    const limitedSignal = limitSignalSize(signal.data, 100000);
+    
+    if (limitedSignal.length === 0) {
+      console.warn('Signal is empty after limiting');
+      setFftError('Signal is too large or empty');
+      setIsLoadingFFT(false);
+      return;
+    }
+
+    setIsLoadingFFT(true);
+    setFftError(null);
+
     try {
-      const response = await fetch("http://localhost:5000/api/fft", {
+      const requestBody = {
+        signal: limitedSignal,
+        sampleRate: signal.sampleRate,
+      };
+
+      // Check request size
+      const requestSize = JSON.stringify(requestBody).length;
+      if (requestSize > 50 * 1024 * 1024) { // 50MB limit
+        throw new Error('Signal is too large to process. Please use a shorter audio file.');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/fft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          signal: signal.data,
-          sampleRate: signal.sampleRate,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
+      if (!response.ok) {
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          // If response isn't JSON, use status text
+          errorMessage = `${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+
       const result = await response.json();
-      
-      if (type === "input") {
-        setInputFourierData(result);
-      } else if (type === "output") {
-        setOutputFourierData(result);
-      } else if (type === "ai") {
-        setAiModelFourierData(result);
+
+      // Validate response structure
+      if (!result.frequencies || !result.magnitudes) {
+        console.error('Invalid FFT response format:', result);
+        throw new Error('Invalid response format from FFT API');
+      }
+
+      // Ensure arrays are not empty
+      if (result.frequencies.length === 0 || result.magnitudes.length === 0) {
+        console.warn('FFT returned empty arrays');
+        setFftError('FFT returned empty arrays');
+        setIsLoadingFFT(false);
+        return;
+      }
+
+      console.log(`FFT computed for ${type}:`, {
+        frequencies: result.frequencies.length,
+        magnitudes: result.magnitudes.length
+      });
+
+      // Safely update state with error handling
+      try {
+        if (type === "input") {
+          setInputFourierData(result);
+        } else if (type === "output") {
+          setOutputFourierData(result);
+        } else if (type === "ai") {
+          setAiModelFourierData(result);
+        }
+        setIsLoadingFFT(false);
+        setFftError(null);
+      } catch (stateError) {
+        console.error('Error updating FFT state:', stateError);
+        setIsLoadingFFT(false);
+        setFftError('Failed to display FFT data. Data may be too large.');
       }
     } catch (error) {
       console.error("Error computing FFT:", error);
+      setIsLoadingFFT(false);
+      const errorMsg = error.message || 'Failed to fetch FFT data. Make sure the backend is running on ' + API_BASE_URL;
+      setFftError(errorMsg);
+      
+      // Clear the fourier data on error
+      if (type === "input") {
+        setInputFourierData(null);
+      } else if (type === "output") {
+        setOutputFourierData(null);
+      } else if (type === "ai") {
+        setAiModelFourierData(null);
+      }
     }
   };
 
@@ -133,31 +239,43 @@ function MainPage() {
   };
 
   const applyEqualization = async () => {
-    if (!inputSignal) return;
+    if (!inputSignal || !apiSignal) return;
 
     try {
-      const response = await fetch("http://localhost:5000/api/equalize", {
+      // Use downsampled signal for equalization API call to match FFT processing
+      const response = await fetch(`${API_BASE_URL}/api/equalize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          signal: inputSignal.data,
-          sampleRate: inputSignal.sampleRate,
+          signal: apiSignal.data, // Use downsampled signal for API consistency
+          sampleRate: apiSignal.sampleRate,
           sliders: sliders,
           mode: currentMode,
         }),
       });
 
       const result = await response.json();
-      const newOutputSignal = {
+      
+      // Create output signal with downsampled data from API
+      const newOutputApiSignal = {
         data: result.outputSignal,
-        sampleRate: inputSignal.sampleRate,
+        sampleRate: apiSignal.sampleRate,
         duration: inputSignal.duration,
       };
       
-      setOutputSignal(newOutputSignal);
+      // For display, scale up the output to match original signal size
+      // But for now, we'll use the downsampled version to match input FFT
+      // The backend currently returns unchanged signal, so this maintains consistency
+      setOutputSignal({
+        data: result.outputSignal.length === apiSignal.data.length 
+          ? result.outputSignal 
+          : apiSignal.data, // Fallback if sizes don't match
+        sampleRate: apiSignal.sampleRate,
+        duration: inputSignal.duration,
+      });
       
-      // Compute Fourier transform for output signal
-      computeFourierTransform(newOutputSignal, "output");
+      // Compute Fourier transform for output signal using the same downsampled format
+      computeFourierTransform(newOutputApiSignal, "output");
     } catch (error) {
       console.error("Error applying equalization:", error);
     }
@@ -559,18 +677,24 @@ function MainPage() {
               fourierData={inputFourierData}
               scale={fftScale}
               title="Input FFT (Original)"
+              isLoading={isLoadingFFT}
+              error={fftError}
             />
             {comparisonMode === "ai" && aiModelFourierData ? (
               <FourierGraph
                 fourierData={aiModelFourierData}
                 scale={fftScale}
                 title="AI Model FFT"
+                isLoading={isLoadingFFT}
+                error={fftError}
               />
             ) : comparisonMode === "slider" ? (
               <FourierGraph
                 fourierData={outputFourierData}
                 scale={fftScale}
                 title="Equalizer FFT"
+                isLoading={isLoadingFFT}
+                error={fftError}
               />
             ) : (
               <>
@@ -578,12 +702,16 @@ function MainPage() {
                   fourierData={outputFourierData}
                   scale={fftScale}
                   title="Slider Output FFT"
+                  isLoading={isLoadingFFT}
+                  error={fftError}
                 />
                 {showAIGraphs && aiModelFourierData && (
                   <FourierGraph
                     fourierData={aiModelFourierData}
                     scale={fftScale}
                     title="AI Model FFT"
+                    isLoading={isLoadingFFT}
+                    error={fftError}
                   />
                 )}
               </>

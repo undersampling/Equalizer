@@ -1,3 +1,5 @@
+/* components/EqualizerSlider.css */
+
 .equalizer-slider {
   background: rgba(26, 31, 58, 0.5);
   backdrop-filter: blur(10px);
@@ -6,8 +8,11 @@
   border: 1px solid rgba(125, 211, 252, 0.3);
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  align-items: center;
+  gap: 20px;
   transition: all 0.3s;
+  min-width: 120px;
+  position: relative;
 }
 
 .equalizer-slider:hover {
@@ -17,45 +22,48 @@
 
 .slider-header {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: center;
 }
 
 .slider-label {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   color: #7dd3fc;
+  word-break: break-word;
 }
 
-.slider-label-input {
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(125, 211, 252, 0.3);
-  color: #e0e0e0;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 15px;
-  flex: 1;
-  margin-right: 10px;
-}
-
-.slider-label-input:focus {
-  outline: none;
-  border-color: #7dd3fc;
+.freq-range-display {
+  font-size: 11px;
+  color: #94a3b8;
+  background: rgba(59, 130, 246, 0.1);
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  white-space: nowrap;
 }
 
 .remove-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
   background: #ef4444;
   color: white;
   border: none;
   border-radius: 50%;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.3s;
+  padding: 0;
+  z-index: 5;
 }
 
 .remove-btn:hover {
@@ -63,152 +71,84 @@
   transform: scale(1.1) rotate(90deg);
 }
 
-/* Visual Frequency Selector (Generic Mode) */
-.freq-visual-selector {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 15px;
-  background: rgba(15, 23, 42, 0.5);
-  border-radius: 8px;
-  border: 1px solid rgba(125, 211, 252, 0.2);
-}
-
-.freq-range-display {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  padding: 8px;
-  background: rgba(59, 130, 246, 0.1);
-  border-radius: 6px;
-}
-
-.freq-value {
-  font-size: 16px;
-  font-weight: 600;
-  color: #7dd3fc;
-}
-
-.freq-separator {
-  color: #64748b;
-}
-
-.freq-sliders {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.freq-slider-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.freq-slider-group label {
-  font-size: 12px;
-  color: #94a3b8;
-  font-weight: 500;
-}
-
-.freq-range-input {
-  width: 100%;
-  height: 6px;
-  border-radius: 10px;
-  background: linear-gradient(to right, #1e293b, #3b82f6);
-  outline: none;
-  -webkit-appearance: none;
-}
-
-.freq-range-input::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #7dd3fc;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.freq-range-input::-webkit-slider-thumb:hover {
-  background: #38bdf8;
-  transform: scale(1.2);
-}
-
-.freq-range-input::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #7dd3fc;
-  cursor: pointer;
-  border: none;
-  transition: all 0.3s;
-}
-
-.freq-range-input::-moz-range-thumb:hover {
-  background: #38bdf8;
-  transform: scale(1.2);
-}
-
-/* Visual Frequency Bar */
-.freq-visual-bar {
-  position: relative;
-  height: 30px;
-  background: linear-gradient(to right, #1e293b 0%, #3b82f6 50%, #1e293b 100%);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.freq-selected-range {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  background: rgba(125, 211, 252, 0.4);
-  border: 2px solid #7dd3fc;
-  border-radius: 4px;
-  transition: all 0.2s;
-}
-
-/* Frequency Info (Other Modes) */
-.freq-info {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.freq-range {
-  background: rgba(59, 130, 246, 0.2);
-  padding: 5px 12px;
-  border-radius: 15px;
-  font-size: 12px;
-  color: #7dd3fc;
-  border: 1px solid rgba(125, 211, 252, 0.3);
-}
-
-/* Magnitude Slider Container */
+/* Magnitude Slider Container - VERTICAL */
 .slider-container {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  position: relative;
 }
 
 .slider-magnitude-label {
-  font-size: 13px;
+  font-size: 12px;
   color: #94a3b8;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+
+/* Slider Wrapper with Axis */
+.slider-wrapper {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 12px;  /* Changed from 3px to 12px */
+  position: relative;
+  height: 250px;
+}
+
+/* Amplitude Axis */
+.amplitude-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  padding: 0;
+  font-size: 10px;
+  color: #64748b;
   font-weight: 500;
+  flex-shrink: 0;
 }
 
+.amplitude-tick {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-direction: row-reverse;
+  height: 0;
+  position: relative;
+}
+
+.amplitude-tick::after {
+  content: "";
+  width: 6px;
+  height: 1px;
+  background: #64748b;
+  flex-shrink: 0;
+}
+
+.amplitude-value {
+  text-align: right;
+  min-width: 24px;
+  white-space: nowrap;
+}
+
+/* Vertical Range Input */
 .slider-input {
-  width: 100%;
-  height: 8px;
+  width: 8px;
+  height: 100%;
   border-radius: 10px;
-  background: linear-gradient(to right, #1e293b, #3b82f6, #10b981);
+  background: linear-gradient(to top, #10b981, #3b82f6, #1e293b);
   outline: none;
-  -webkit-appearance: none;
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
+/* Webkit Browsers (Chrome, Safari, Edge) - Vertical Slider */
 .slider-input::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -216,9 +156,10 @@
   height: 22px;
   border-radius: 50%;
   background: #7dd3fc;
-  cursor: pointer;
+  cursor: grab;
   box-shadow: 0 2px 10px rgba(125, 211, 252, 0.5);
   transition: all 0.3s;
+  border: 2px solid #38bdf8;
 }
 
 .slider-input::-webkit-slider-thumb:hover {
@@ -227,13 +168,18 @@
   box-shadow: 0 4px 15px rgba(125, 211, 252, 0.7);
 }
 
+.slider-input::-webkit-slider-thumb:active {
+  cursor: grabbing;
+}
+
+/* Firefox */
 .slider-input::-moz-range-thumb {
   width: 22px;
   height: 22px;
   border-radius: 50%;
   background: #7dd3fc;
-  cursor: pointer;
-  border: none;
+  cursor: grab;
+  border: 2px solid #38bdf8;
   box-shadow: 0 2px 10px rgba(125, 211, 252, 0.5);
   transition: all 0.3s;
 }
@@ -244,12 +190,66 @@
   box-shadow: 0 4px 15px rgba(125, 211, 252, 0.7);
 }
 
+.slider-input::-moz-range-thumb:active {
+  cursor: grabbing;
+}
+
+.slider-input::-moz-range-track {
+  background: transparent;
+  border: none;
+}
+
+.slider-input::-moz-range-progress {
+  background-color: rgba(16, 185, 129, 0.3);
+}
+
+/* Slider Value Display */
 .slider-value {
-  align-self: center;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
   color: #7dd3fc;
-  padding: 8px 16px;
+  padding: 8px 12px;
   background: rgba(59, 130, 246, 0.15);
-  border-radius: 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  min-width: 50px;
+  text-align: center;
+  margin-top: 5px;
+}
+
+/* Frequency Info (Read-only mode) */
+.freq-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.freq-range {
+  background: rgba(59, 130, 246, 0.2);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  color: #7dd3fc;
+  border: 1px solid rgba(125, 211, 252, 0.3);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .equalizer-slider {
+    min-width: 100px;
+  }
+
+  .amplitude-value {
+    font-size: 9px;
+    min-width: 20px;
+  }
+
+  .amplitude-tick::after {
+    width: 5px;
+  }
+
+  .slider-wrapper {
+    height: 220px;
+  }
 }

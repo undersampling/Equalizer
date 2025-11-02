@@ -1,0 +1,145 @@
+/* AI Model Section - Simplified */
+.ai-model-section {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  padding: 25px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.ai-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.ai-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 15px;
+  background: rgba(139, 92, 246, 0.1);
+  border-radius: 8px;
+}
+
+.status-indicator.loaded {
+  color: #10b981;
+  font-size: 18px;
+}
+
+.status-text {
+  color: #e0e0e0;
+  font-size: 14px;
+}
+
+.ai-process-btn {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.ai-process-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+}
+
+.ai-process-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.comparison-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.comparison-title {
+  color: #a78bfa;
+  font-size: 18px;
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+.comparison-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.comparison-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  background: rgba(139, 92, 246, 0.1);
+  border: 2px solid rgba(139, 92, 246, 0.3);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.comparison-btn:hover {
+  background: rgba(139, 92, 246, 0.2);
+  transform: translateY(-2px);
+}
+
+.comparison-btn.active {
+  background: rgba(139, 92, 246, 0.3);
+  border-color: #8b5cf6;
+  box-shadow: 0 0 15px rgba(139, 92, 246, 0.4);
+}
+
+.comparison-icon {
+  font-size: 28px;
+}
+
+.comparison-btn-content {
+  flex: 1;
+  text-align: left;
+}
+
+.comparison-btn-title {
+  color: #e0e0e0;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+
+.comparison-btn-subtitle {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.comparison-info {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.info-badge {
+  color: #7dd3fc;
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ai-controls {
+    flex-direction: column;
+  }
+
+  .comparison-buttons {
+    grid-template-columns: 1fr;
+  }
+}

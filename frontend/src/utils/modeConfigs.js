@@ -1,28 +1,7 @@
 export const getModeConfig = (mode) => {
   const configs = {
     generic: {
-      sliders: [
-        {
-          id: 1,
-          label: "Low Frequencies",
-          value: 1,
-          min: 0,
-          max: 2,
-          minFreq: 0,
-          width: 1000,
-          freqRanges: [[0, 1000]],
-        },
-        {
-          id: 2,
-          label: "Mid Frequencies",
-          value: 1,
-          min: 0,
-          max: 2,
-          minFreq: 1000,
-          width: 4000,
-          freqRanges: [[1000, 5000]],
-        },
-      ],
+      sliders: [], // Empty array - user adds sliders manually
     },
     musical: {
       sliders: [

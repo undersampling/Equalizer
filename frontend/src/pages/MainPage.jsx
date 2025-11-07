@@ -74,7 +74,18 @@ function MainPage() {
       }
     };
   }, []);
-
+  useEffect(() => {
+  // Recompute FFT for all signals when scale changes
+  if (apiSignal) {
+    computeFourierTransform(apiSignal, "input");
+  }
+  if (outputSignal) {
+    computeFourierTransform(apiSignal, "output"); // Use apiSignal for consistency
+  }
+  if (aiModelSignal) {
+    computeFourierTransform(aiModelSignal, "ai");
+  }
+  }, [fftScale]); 
   const handleModeChange = (e) => {
     const newMode = e.target.value;
     setCurrentMode(newMode);
@@ -145,108 +156,108 @@ function MainPage() {
   };
 
   const computeFourierTransform = async (signal, type) => {
-    if (!signal || !signal.data || signal.data.length === 0) {
-      console.warn('No signal data to compute FFT');
-      setFftError(null);
-      return;
-    }
-
-    // Limit signal size before sending
-    const limitedSignal = limitSignalSize(signal.data, 100000);
-    
-    if (limitedSignal.length === 0) {
-      console.warn('Signal is empty after limiting');
-      setFftError('Signal is too large or empty');
-      setIsLoadingFFT(false);
-      return;
-    }
-
-    setIsLoadingFFT(true);
+  if (!signal || !signal.data || signal.data.length === 0) {
+    console.warn('No signal data to compute FFT');
     setFftError(null);
+    return;
+  }
 
-    try {
-      const requestBody = {
-        signal: limitedSignal,
-        sampleRate: signal.sampleRate,
-      };
+  // Limit signal size before sending
+  const limitedSignal = limitSignalSize(signal.data, 100000);
+  
+  if (limitedSignal.length === 0) {
+    console.warn('Signal is empty after limiting');
+    setFftError('Signal is too large or empty');
+    setIsLoadingFFT(false);
+    return;
+  }
 
-      // Check request size
-      const requestSize = JSON.stringify(requestBody).length;
-      if (requestSize > 50 * 1024 * 1024) { // 50MB limit
-        throw new Error('Signal is too large to process. Please use a shorter audio file.');
-      }
+  setIsLoadingFFT(true);
+  setFftError(null);
 
-      const response = await fetch(`${API_BASE_URL}/api/fft`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
+  try {
+    const requestBody = {
+      signal: limitedSignal,
+      sampleRate: signal.sampleRate,
+      scale: fftScale  // Add the scale parameter here
+    };
 
-      if (!response.ok) {
-        let errorMessage = `HTTP error! status: ${response.status}`;
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorMessage;
-        } catch (e) {
-          // If response isn't JSON, use status text
-          errorMessage = `${response.status}: ${response.statusText}`;
-        }
-        throw new Error(errorMessage);
-      }
-
-      const result = await response.json();
-
-      // Validate response structure
-      if (!result.frequencies || !result.magnitudes) {
-        console.error('Invalid FFT response format:', result);
-        throw new Error('Invalid response format from FFT API');
-      }
-
-      // Ensure arrays are not empty
-      if (result.frequencies.length === 0 || result.magnitudes.length === 0) {
-        console.warn('FFT returned empty arrays');
-        setFftError('FFT returned empty arrays');
-        setIsLoadingFFT(false);
-        return;
-      }
-
-      console.log(`FFT computed for ${type}:`, {
-        frequencies: result.frequencies.length,
-        magnitudes: result.magnitudes.length
-      });
-
-      // Safely update state with error handling
-      try {
-        if (type === "input") {
-          setInputFourierData(result);
-        } else if (type === "output") {
-          setOutputFourierData(result);
-        } else if (type === "ai") {
-          setAiModelFourierData(result);
-        }
-        setIsLoadingFFT(false);
-        setFftError(null);
-      } catch (stateError) {
-        console.error('Error updating FFT state:', stateError);
-        setIsLoadingFFT(false);
-        setFftError('Failed to display FFT data. Data may be too large.');
-      }
-    } catch (error) {
-      console.error("Error computing FFT:", error);
-      setIsLoadingFFT(false);
-      const errorMsg = error.message || 'Failed to fetch FFT data. Make sure the backend is running on ' + API_BASE_URL;
-      setFftError(errorMsg);
-      
-      // Clear the fourier data on error
-      if (type === "input") {
-        setInputFourierData(null);
-      } else if (type === "output") {
-        setOutputFourierData(null);
-      } else if (type === "ai") {
-        setAiModelFourierData(null);
-      }
+    // Check request size
+    const requestSize = JSON.stringify(requestBody).length;
+    if (requestSize > 50 * 1024 * 1024) { // 50MB limit
+      throw new Error('Signal is too large to process. Please use a shorter audio file.');
     }
-  };
+
+    const response = await fetch(`${API_BASE_URL}/api/fft`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      let errorMessage = `HTTP error! status: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (e) {
+        errorMessage = `${response.status}: ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
+    }
+
+    const result = await response.json();
+
+    // Validate response structure
+    if (!result.frequencies || !result.magnitudes) {
+      console.error('Invalid FFT response format:', result);
+      throw new Error('Invalid response format from FFT API');
+    }
+
+    // Ensure arrays are not empty
+    if (result.frequencies.length === 0 || result.magnitudes.length === 0) {
+      console.warn('FFT returned empty arrays');
+      setFftError('FFT returned empty arrays');
+      setIsLoadingFFT(false);
+      return;
+    }
+
+    console.log(`FFT computed for ${type} with ${fftScale} scale:`, {
+      frequencies: result.frequencies.length,
+      magnitudes: result.magnitudes.length
+    });
+
+    // Safely update state with error handling
+    try {
+      if (type === "input") {
+        setInputFourierData(result);
+      } else if (type === "output") {
+        setOutputFourierData(result);
+      } else if (type === "ai") {
+        setAiModelFourierData(result);
+      }
+      setIsLoadingFFT(false);
+      setFftError(null);
+    } catch (stateError) {
+      console.error('Error updating FFT state:', stateError);
+      setIsLoadingFFT(false);
+      setFftError('Failed to display FFT data. Data may be too large.');
+    }
+  } catch (error) {
+    console.error("Error computing FFT:", error);
+    setIsLoadingFFT(false);
+    const errorMsg = error.message || 'Failed to fetch FFT data. Make sure the backend is running on ' + API_BASE_URL;
+    setFftError(errorMsg);
+    
+    // Clear the fourier data on error
+    if (type === "input") {
+      setInputFourierData(null);
+    } else if (type === "output") {
+      setOutputFourierData(null);
+    } else if (type === "ai") {
+      setAiModelFourierData(null);
+    }
+  }
+};
 
   const handleSliderChange = (sliderId, newValue) => {
     // Update state immediately for responsive UI

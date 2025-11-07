@@ -49,3 +49,5 @@
 - **CORS errors**: Make sure `django-cors-headers` is installed and `CorsMiddleware` is in `MIDDLEWARE`
 - **Module not found**: Install librosa for spectrogram: `pip install librosa`
 
+
+

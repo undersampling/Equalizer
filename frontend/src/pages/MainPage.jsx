@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import EqualizerSlider from "../components/EqualizerSlider";
 import SliderCreationModal from "../components/SliderCreationModal";
 import SignalViewer from "../components/SignalViewer";
@@ -35,6 +35,10 @@ function MainPage() {
 
   const fileInputRef = useRef(null);
   const audioContextRef = useRef(null);
+  const equalizationTimeoutRef = useRef(null);
+  const fftTimeoutRef = useRef(null);
+  const isProcessingRef = useRef(false);
+  const slidersRef = useRef(sliders);
 
   // API base URL - try both ports
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -45,6 +49,7 @@ function MainPage() {
   useEffect(() => {
     const config = getModeConfig(currentMode);
     setSliders(config.sliders);
+    slidersRef.current = config.sliders;
     // Reset AI model signal and comparison mode when mode changes
     setAiModelSignal(null);
     setAiModelFourierData(null);
@@ -52,6 +57,23 @@ function MainPage() {
     setShowAIGraphs(false);
     // Note: apiSignal is preserved when mode changes to maintain FFT consistency
   }, [currentMode]);
+
+  // Update sliders ref whenever sliders change
+  useEffect(() => {
+    slidersRef.current = sliders;
+  }, [sliders]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (equalizationTimeoutRef.current) {
+        clearTimeout(equalizationTimeoutRef.current);
+      }
+      if (fftTimeoutRef.current) {
+        clearTimeout(fftTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleModeChange = (e) => {
     const newMode = e.target.value;
@@ -227,21 +249,41 @@ function MainPage() {
   };
 
   const handleSliderChange = (sliderId, newValue) => {
+    // Update state immediately for responsive UI
     setSliders((prev) =>
       prev.map((slider) =>
         slider.id === sliderId ? { ...slider, value: newValue } : slider
       )
     );
 
-    if (inputSignal) {
-      applyEqualization();
+    // Debounce the API call - only process after user stops moving slider
+    if (inputSignal && apiSignal) {
+      // Clear existing timeout
+      if (equalizationTimeoutRef.current) {
+        clearTimeout(equalizationTimeoutRef.current);
+      }
+      
+      // Set new timeout for debounced equalization (150ms delay)
+      equalizationTimeoutRef.current = setTimeout(() => {
+        applyEqualization();
+      }, 150);
     }
   };
 
-  const applyEqualization = async () => {
+  const applyEqualization = useCallback(async () => {
     if (!inputSignal || !apiSignal) return;
+    
+    // Prevent multiple simultaneous calls
+    if (isProcessingRef.current) {
+      return;
+    }
+    
+    isProcessingRef.current = true;
 
     try {
+      // Get current sliders from ref to ensure we have the latest values
+      const currentSliders = slidersRef.current;
+      
       // Use downsampled signal for equalization API call to match FFT processing
       const response = await fetch(`${API_BASE_URL}/api/equalize`, {
         method: "POST",
@@ -249,12 +291,28 @@ function MainPage() {
         body: JSON.stringify({
           signal: apiSignal.data, // Use downsampled signal for API consistency
           sampleRate: apiSignal.sampleRate,
-          sliders: sliders,
+          sliders: currentSliders, // Use latest sliders from ref
           mode: currentMode,
         }),
       });
 
+      if (!response.ok) {
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = `${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+
       const result = await response.json();
+      
+      // Validate response
+      if (!result.outputSignal || !Array.isArray(result.outputSignal)) {
+        throw new Error('Invalid response from equalization API');
+      }
       
       // Create output signal with downsampled data from API
       const newOutputApiSignal = {
@@ -263,23 +321,30 @@ function MainPage() {
         duration: inputSignal.duration,
       };
       
-      // For display, scale up the output to match original signal size
-      // But for now, we'll use the downsampled version to match input FFT
-      // The backend currently returns unchanged signal, so this maintains consistency
+      // Update output signal
       setOutputSignal({
-        data: result.outputSignal.length === apiSignal.data.length 
-          ? result.outputSignal 
-          : apiSignal.data, // Fallback if sizes don't match
+        data: result.outputSignal,
         sampleRate: apiSignal.sampleRate,
         duration: inputSignal.duration,
       });
       
-      // Compute Fourier transform for output signal using the same downsampled format
-      computeFourierTransform(newOutputApiSignal, "output");
+      // Debounce FFT computation to avoid excessive calls
+      if (fftTimeoutRef.current) {
+        clearTimeout(fftTimeoutRef.current);
+      }
+      
+      fftTimeoutRef.current = setTimeout(() => {
+        // Compute Fourier transform for output signal using the same downsampled format
+        computeFourierTransform(newOutputApiSignal, "output");
+      }, 200); // Slightly longer delay for FFT since it's less critical for real-time feel
     } catch (error) {
       console.error("Error applying equalization:", error);
+      // Don't show alert on every error - just log it
+      // alert(`Equalization failed: ${error.message}. Make sure the backend is running on ${API_BASE_URL}`);
+    } finally {
+      isProcessingRef.current = false;
     }
-  };
+  }, [inputSignal, apiSignal, currentMode, API_BASE_URL]);
 
   const handleAddSlider = () => {
     setShowSliderModal(true);
@@ -288,13 +353,24 @@ function MainPage() {
   const handleCreateSlider = (newSlider) => {
     setSliders([...sliders, newSlider]);
     setShowSliderModal(false);
-    // Apply equalization after creating slider
-    setTimeout(() => applyEqualization(), 100);
+    // Apply equalization after creating slider (with debounce)
+    if (equalizationTimeoutRef.current) {
+      clearTimeout(equalizationTimeoutRef.current);
+    }
+    equalizationTimeoutRef.current = setTimeout(() => {
+      applyEqualization();
+    }, 100);
   };
 
   const handleRemoveSlider = (sliderId) => {
     setSliders((prev) => prev.filter((s) => s.id !== sliderId));
-    setTimeout(() => applyEqualization(), 100);
+    // Apply equalization after removing slider (with debounce)
+    if (equalizationTimeoutRef.current) {
+      clearTimeout(equalizationTimeoutRef.current);
+    }
+    equalizationTimeoutRef.current = setTimeout(() => {
+      applyEqualization();
+    }, 100);
   };
 
   const handlePlay = () => {

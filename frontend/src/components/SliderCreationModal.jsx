@@ -81,6 +81,9 @@ function SliderCreationModal({ onCreate, onCancel }) {
         {/* Frequency Range Selector */}
         <div className="form-group">
           <label>Select Frequency Range (0 - 20,000 Hz)</label>
+          <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px", marginBottom: "8px" }}>
+            ⓘ This range will be fixed for this slider. You'll control the amplitude (gain) factor separately.
+          </p>
 
           {/* Visual Frequency Bar */}
           <div
@@ -134,6 +137,20 @@ function SliderCreationModal({ onCreate, onCancel }) {
               </span>
             </div>
           </div>
+        </div>
+
+        {/* Info Note */}
+        <div style={{ 
+          fontSize: "12px", 
+          color: "#7dd3fc", 
+          backgroundColor: "rgba(59, 130, 246, 0.1)",
+          padding: "10px",
+          borderRadius: "6px",
+          border: "1px solid rgba(125, 211, 252, 0.2)",
+          marginTop: "10px"
+        }}>
+          <strong>Note:</strong> After creating, this slider will have a fixed frequency range. 
+          Use the amplitude slider to raise (value &gt; 1.0) or lower (value &lt; 1.0) the selected frequency range.
         </div>
 
         {/* Buttons */}

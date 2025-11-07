@@ -64,3 +64,5 @@ export function limitSignalSize(signal, maxSamples = 100000) {
   return limited.slice(0, maxSamples);
 }
 
+
+

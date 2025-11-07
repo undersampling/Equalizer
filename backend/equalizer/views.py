@@ -2,7 +2,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 import numpy as np
-from .utils import fft_magnitude_phase, compute_spectrogram
+from .utils import fft_magnitude_phase, compute_spectrogram, apply_equalization, fftfreq_custom
 
 
 @api_view(['POST'])
@@ -53,9 +53,10 @@ def compute_fft(request):
         # Compute FFT
         magnitude, phase, fft_result = fft_magnitude_phase(signal)
 
-        # Calculate frequencies
+        # Calculate frequencies using custom fftfreq function
         N = len(magnitude)
-        frequencies = np.fft.fftfreq(N, 1 / sample_rate)
+        d = 1.0 / sample_rate
+        frequencies = fftfreq_custom(N, d)
 
         # Only return positive frequencies (first half)
         positive_freq_idx = frequencies >= 0
@@ -132,7 +133,7 @@ def compute_spectrogram_view(request):
         if np.any(np.isnan(signal)) or np.any(np.isinf(signal)):
             signal = np.nan_to_num(signal, nan=0.0, posinf=0.0, neginf=0.0)
 
-        # Compute spectrogram
+        # Compute spectrogram using custom FFT implementation
         spectrogram_data = compute_spectrogram(
             signal,
             sample_rate,
@@ -144,12 +145,6 @@ def compute_spectrogram_view(request):
             max_time_points=max_time_points,
             max_freq_points=max_freq_points
         )
-
-        if spectrogram_data is None:
-            return Response(
-                {'error': 'librosa not available. Please install librosa.'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
 
         return Response(spectrogram_data, status=status.HTTP_200_OK)
 
@@ -168,13 +163,25 @@ def equalize_signal(request):
     {
         "signal": [array of floats],
         "sampleRate": float,
-        "sliders": [{"frequency": float, "gain": float, "q": float}, ...],
-        "mode": string
+        "sliders": [
+            {
+                "id": int,
+                "label": string,
+                "value": float,  // Gain factor (1.0 = unity, <1.0 = lower, >1.0 = raise)
+                "freqRanges": [[min_freq, max_freq], ...]  // Frequency intervals to equalize
+            },
+            ...
+        ],
+        "mode": string (optional)
+    }
+    Returns:
+    {
+        "outputSignal": [array of floats]
     }
     """
     try:
         signal_data = request.data.get('signal', [])
-        sample_rate = request.data.get('sampleRate', 44100)
+        sample_rate = float(request.data.get('sampleRate', 44100))
         sliders = request.data.get('sliders', [])
 
         if not signal_data:
@@ -183,21 +190,46 @@ def equalize_signal(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        if not isinstance(signal_data, list):
+            return Response(
+                {'error': 'Signal must be an array'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(signal_data) == 0:
+            return Response(
+                {'error': 'Signal array cannot be empty'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Convert to numpy array
         signal = np.array(signal_data, dtype=float)
 
-        # TODO: Implement equalization logic based on sliders
-        # For now, return the original signal
-        # You can implement IIR/FIR filter here based on slider frequencies and gains
+        # Handle NaN or Inf values
+        if np.any(np.isnan(signal)) or np.any(np.isinf(signal)):
+            signal = np.nan_to_num(signal, nan=0.0, posinf=0.0, neginf=0.0)
 
-        output_signal = signal  # Placeholder
+        # Validate sample rate
+        if sample_rate <= 0:
+            return Response(
+                {'error': 'Sample rate must be positive'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Apply equalization using the utility function
+        output_signal = apply_equalization(signal, sample_rate, sliders)
 
         return Response({
             'outputSignal': output_signal.tolist()
         }, status=status.HTTP_200_OK)
 
+    except ValueError as e:
+        return Response(
+            {'error': f'Invalid input: {str(e)}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
     except Exception as e:
         return Response(
-            {'error': str(e)},
+            {'error': f'Equalization failed: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

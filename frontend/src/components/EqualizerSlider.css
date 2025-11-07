@@ -44,6 +44,18 @@
   border-radius: 4px;
   border: 1px solid rgba(125, 211, 252, 0.2);
   white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.freq-range-label {
+  font-size: 9px;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .remove-btn {

@@ -1,0 +1,4 @@
+django
+numpy
+djangorestframework
+django-cors-headers

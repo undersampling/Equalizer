@@ -131,16 +131,13 @@ function MainPage() {
   useEffect(() => {
     const saveTimeout = setTimeout(() => {
       if (sliders && sliders.length > 0) {
-        // 1. Save to localStorage (fast, always works)
         saveSettings(currentMode, sliders);
         console.log(`✅ Auto-saved to localStorage: ${currentMode}`);
 
-        // 2. Sync to backend modes.json (slower, may fail if offline)
         if (backendSyncTimeoutRef.current) {
           clearTimeout(backendSyncTimeoutRef.current);
         }
 
-        // Debounce backend sync (wait 2 seconds after last change)
         backendSyncTimeoutRef.current = setTimeout(async () => {
           try {
             const success = await autoSyncSliders(
@@ -159,9 +156,9 @@ function MainPage() {
               error.message
             );
           }
-        }, 2000); // Wait 2 seconds before syncing to backend
+        }, 2000);
       }
-    }, 500); // Wait 500ms for localStorage save
+    }, 500);
 
     return () => {
       clearTimeout(saveTimeout);
@@ -170,6 +167,21 @@ function MainPage() {
       }
     };
   }, [sliders, currentMode, API_BASE_URL]);
+
+  // ============================================
+  // Recompute FFT when scale changes
+  // ============================================
+  useEffect(() => {
+    if (apiSignal) {
+      computeFourierTransform(apiSignal, "input");
+    }
+    if (outputSignal && apiSignal) {
+      computeFourierTransform(apiSignal, "output");
+    }
+    if (aiModelSignal) {
+      computeFourierTransform(aiModelSignal, "ai");
+    }
+  }, [fftScale]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -227,7 +239,7 @@ function MainPage() {
   };
 
   // ============================================
-  // RESET TO DEFAULTS - Refresh Mode Configurations
+  // RESET TO DEFAULTS
   // ============================================
   const handleRefreshModeConfigs = async () => {
     const confirmReset = confirm(
@@ -259,7 +271,6 @@ function MainPage() {
     try {
       console.log("Resetting to default configuration...");
 
-      // 1. Call backend reset API
       const resetResponse = await fetch(`${API_BASE_URL}/api/modes/reset`, {
         method: "POST",
         headers: {
@@ -274,18 +285,15 @@ function MainPage() {
       const resetResult = await resetResponse.json();
       console.log("Backend reset successful:", resetResult);
 
-      // 2. Clear ALL localStorage settings
       const modes = ["generic", "musical", "animal", "human"];
       modes.forEach((mode) => {
         clearSettings(mode);
       });
       console.log("✅ Cleared all localStorage settings");
 
-      // 3. Fetch fresh configs from backend
       const configs = await getAllModeConfigs(API_BASE_URL, true);
       setModeConfigs(configs);
 
-      // 4. Apply default config for current mode
       if (configs[currentMode]) {
         setSliders(configs[currentMode].sliders);
         slidersRef.current = configs[currentMode].sliders;
@@ -293,13 +301,12 @@ function MainPage() {
       }
 
       alert(
-        "✅ Reset Successful" +
+        "✅ Reset Successful!" +
           "All modes have been reset to default configuration:" +
           "• Generic mode: No sliders" +
           "• All other modes: Slider values reset to 1.0"
       );
 
-      // 5. Apply equalization with reset config
       if (inputSignal && apiSignal) {
         setTimeout(() => applyEqualization(), 100);
       }
@@ -375,6 +382,9 @@ function MainPage() {
     reader.readAsArrayBuffer(file);
   };
 
+  // ============================================
+  // Compute Fourier Transform with Scale Support
+  // ============================================
   const computeFourierTransform = async (signal, type) => {
     if (!signal || !signal.data || signal.data.length === 0) {
       console.warn("No signal data to compute FFT");
@@ -398,6 +408,7 @@ function MainPage() {
       const requestBody = {
         signal: limitedSignal,
         sampleRate: signal.sampleRate,
+        scale: fftScale, // Include scale parameter
       };
 
       const requestSize = JSON.stringify(requestBody).length;
@@ -438,7 +449,7 @@ function MainPage() {
         return;
       }
 
-      console.log(`FFT computed for ${type}:`, {
+      console.log(`FFT computed for ${type} with ${fftScale} scale:`, {
         frequencies: result.frequencies.length,
         magnitudes: result.magnitudes.length,
       });

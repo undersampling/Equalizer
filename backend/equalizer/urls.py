@@ -1,11 +1,16 @@
 
 
-
-# api/urls.py
 from django.urls import path
+from .views import compute_fft, compute_spectrogram_view, equalize_signal
 from . import config_views, settings_views
 
+
 urlpatterns = [
+    # Signal processing endpoints
+    path('fft', compute_fft, name='compute_fft'),
+    path('spectrogram', compute_spectrogram_view, name='compute_spectrogram'),
+    path('equalize', equalize_signal, name='equalize_signal'),
+
     # Mode configuration endpoints
     path('modes/all', config_views.get_all_modes, name='get_all_modes'),
     path('modes/config', config_views.get_mode_config, name='get_mode_config'),

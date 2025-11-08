@@ -89,7 +89,15 @@ def hz_to_mel(hz):
     """
     return 2595.0 * np.log10(1.0 + hz / 700.0)
 
-
+def hz_to_audiogram_scale(hz):
+    """
+    Convert Hz to audiogram scale position (logarithmic).
+    Audiogram typically uses logarithmic scale from 125 Hz to 8000 Hz.
+    """
+    if hz <= 0:
+        return 0
+    # Use log base 2 for octave-based scaling
+    return np.log2(hz / 125.0)
 def mel_to_hz(mel):
     """
     Convert frequency in Mel scale to Hz.
@@ -341,7 +349,83 @@ def fftfreq_custom(n, d=1.0):
     
     return frequencies
 
-
+def compute_fft_with_scale(signal, sample_rate, scale='linear'):
+    """
+    Compute FFT with support for linear and audiogram scales.
+    
+    Args:
+        signal: Input time-domain signal (list or numpy array)
+        sample_rate: Sample rate in Hz
+        scale: 'linear' or 'audiogram'
+    
+    Returns:
+        Dictionary with 'frequencies' and 'magnitudes' arrays
+    """
+    # Convert to numpy array
+    signal = np.array(signal, dtype=float)
+    
+    # Handle empty or invalid signal
+    if len(signal) == 0:
+        return {'frequencies': [], 'magnitudes': []}
+    
+    # Apply FFT
+    fft_result = fft_custom(signal)
+    
+    # Get number of samples
+    N = len(fft_result)
+    
+    # Calculate frequencies
+    d = 1.0 / sample_rate
+    frequencies = fftfreq_custom(N, d)
+    
+    # Take only positive frequencies (first half + DC)
+    n_positive = N // 2 + 1
+    frequencies = frequencies[:n_positive]
+    fft_result = fft_result[:n_positive]
+    
+    # Calculate magnitudes
+    magnitudes = np.abs(fft_result)
+    
+    # Apply scale transformation
+    if scale == 'audiogram':
+        # Audiogram scale: logarithmic frequency axis
+        # Convert frequencies to audiogram scale (logarithmic)
+        # Typical audiogram uses octave bands: 125, 250, 500, 1k, 2k, 4k, 8k Hz
+        
+        # For audiogram, we need to:
+        # 1. Use logarithmic frequency spacing
+        # 2. Group frequencies into bands (optional)
+        # 3. Convert magnitudes to dB scale
+        
+        # Convert magnitudes to dB
+        # Avoid log(0) by adding small epsilon
+        epsilon = 1e-10
+        magnitudes_db = 20 * np.log10(magnitudes + epsilon)
+        
+        # Normalize to 0-100 dB range (typical audiogram range)
+        # Find max and min for normalization
+        max_db = np.max(magnitudes_db)
+        min_db = max_db - 100  # 100 dB dynamic range
+        
+        # Clip and normalize
+        magnitudes_db = np.clip(magnitudes_db, min_db, max_db)
+        magnitudes = magnitudes_db - min_db  # Shift to 0-100 range
+        
+        # Optional: Filter out frequencies below 20 Hz and above 20 kHz
+        # (typical human hearing range)
+        valid_mask = (frequencies >= 20) & (frequencies <= 20000)
+        frequencies = frequencies[valid_mask]
+        magnitudes = magnitudes[valid_mask]
+        
+    elif scale == 'linear':
+        # Linear scale: keep frequencies and magnitudes as-is
+        # Magnitudes are already in linear scale
+        pass
+    
+    return {
+        'frequencies': frequencies.tolist(),
+        'magnitudes': magnitudes.tolist()
+    }
 def fft_custom(x):
     """
     Custom implementation of Fast Fourier Transform using Cooley-Tukey algorithm

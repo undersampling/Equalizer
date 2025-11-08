@@ -6,6 +6,7 @@ import Spectrogram from "../components/Spectrogram";
 import FourierGraph from "../components/FourierGraph";
 import AIModelSection from "../components/AIModelSection";
 import UnifiedMusicController from "../components/UnifiedMusicController";
+import LinkedSignalViewers from "../components/LinkedSignalViewers";
 import {
   getAllModeConfigs,
   getModeConfig,
@@ -992,55 +993,28 @@ Using fallback configuration`}
             </button>
           )}
         </section>
-        <section className="controls-panel">
-          <div className="controls-row">
-            <button className="control-btn play" onClick={handlePlay}>
-              ▶ Play
-            </button>
-            <button className="control-btn" onClick={handlePause}>
-              ⏸ Pause
-            </button>
-            <button className="control-btn stop" onClick={handleStop}>
-              ⏹ Stop
-            </button>
-            <div className="speed-control">
-              <label>Speed:</label>
-              <input
-                type="range"
-                min="0.5"
-                max="2"
-                step="0.1"
-                value={playbackSpeed}
-                onChange={handleSpeedChange}
-              />
-              <span>{playbackSpeed.toFixed(1)}x</span>
-            </div>
-            <button className="control-btn" onClick={handleZoomIn}>
-              🔍+ Zoom In
-            </button>
-            <button className="control-btn" onClick={handleZoomOut}>
-              🔍- Zoom Out
-            </button>
-            <button className="control-btn" onClick={handleReset}>
-              🔄 Reset
-            </button>
-          </div>
-        </section>
+       {/* Linked Cine Signal Viewers */}
+        <LinkedSignalViewers
+          inputSignal={inputSignal}
+          outputSignal={outputSignal}
+          aiModelSignal={aiModelSignal}
+          showAIViewer={aiStems && aiModelSignal}
+        />
 
+        {/* Audio Playback Buttons */}
         <div
           className="audio-buttons"
           style={{
-            gridTemplateColumns:
-              showAIGraphs && aiModelSignal ? "1fr 1fr 1fr" : "1fr 1fr",
+            gridTemplateColumns: aiStems && aiModelSignal ? "1fr 1fr 1fr" : "1fr 1fr",
           }}
         >
           <button className="audio-btn" onClick={handlePlayInputAudio}>
             🔊 Play Input Audio
           </button>
           <button className="audio-btn" onClick={handlePlayOutputAudio}>
-            🔊 Play Slider Output
+            🔊 Play Manual EQ Output
           </button>
-          {showAIGraphs && aiModelSignal && (
+          {aiStems && aiModelSignal && (
             <button
               className="audio-btn"
               onClick={handlePlayAIAudio}
@@ -1048,67 +1022,10 @@ Using fallback configuration`}
                 background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
               }}
             >
-              🔊 Play AI Model Output
+              🔊 Play AI Stems Output
             </button>
           )}
         </div>
-
-        <div
-          className="viewers-grid"
-          style={{
-            gridTemplateColumns: getGridColumns(),
-          }}
-        >
-          <SignalViewer
-            signal={inputSignal}
-            title="Input Signal (Original)"
-            isPlaying={isPlaying}
-            currentTime={currentTime}
-            zoom={zoom}
-            pan={pan}
-          />
-          {comparisonMode === "ai" && aiModelSignal ? (
-            <SignalViewer
-              signal={aiModelSignal}
-              title="AI Model Output"
-              isPlaying={isPlaying}
-              currentTime={currentTime}
-              zoom={zoom}
-              pan={pan}
-            />
-          ) : comparisonMode === "slider" ? (
-            <SignalViewer
-              signal={outputSignal}
-              title="Equalizer Output"
-              isPlaying={isPlaying}
-              currentTime={currentTime}
-              zoom={zoom}
-              pan={pan}
-            />
-          ) : (
-            <>
-              <SignalViewer
-                signal={outputSignal}
-                title="Slider Output Signal"
-                isPlaying={isPlaying}
-                currentTime={currentTime}
-                zoom={zoom}
-                pan={pan}
-              />
-              {showAIGraphs && aiModelSignal && (
-                <SignalViewer
-                  signal={aiModelSignal}
-                  title="AI Model Output"
-                  isPlaying={isPlaying}
-                  currentTime={currentTime}
-                  zoom={zoom}
-                  pan={pan}
-                />
-              )}
-            </>
-          )}
-        </div>
-
         <section className="section">
           <div className="fourier-section">
             <h2 className="section-title">📊 Fourier Transform</h2>

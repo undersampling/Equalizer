@@ -1,8 +1,20 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import './SignalViewer.css';
 
-function SignalViewer({ signal, title, isPlaying, currentTime, zoom, pan }) {
+function SignalViewer({ 
+  signal, 
+  title, 
+  isPlaying, 
+  currentTime, 
+  zoom, 
+  pan,
+  onPanChange,
+  onZoomChange,
+  isCineMode = true
+}) {
   const canvasRef = useRef(null);
+  const isDraggingRef = useRef(false);
+  const lastMouseXRef = useRef(0);
 
   useEffect(() => {
     if (!signal || !canvasRef.current) return;
@@ -12,14 +24,15 @@ function SignalViewer({ signal, title, isPlaying, currentTime, zoom, pan }) {
     const width = canvas.width;
     const height = canvas.height;
 
-    // Clear canvas
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    // Clear canvas with solid background
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = 'rgba(15, 23, 42, 1)';
     ctx.fillRect(0, 0, width, height);
 
     // Draw grid
     ctx.strokeStyle = 'rgba(125, 211, 252, 0.08)';
     ctx.lineWidth = 1;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i <= 4; i++) {
       const y = (height / 4) * i;
       ctx.beginPath();
       ctx.moveTo(0, y);
@@ -27,57 +40,213 @@ function SignalViewer({ signal, title, isPlaying, currentTime, zoom, pan }) {
       ctx.stroke();
     }
 
-    // Draw signal
-    ctx.strokeStyle = '#7dd3fc';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-
-    const data = signal.data;
-    const step = Math.max(1, Math.floor(data.length / width / zoom));
-    const startIndex = Math.floor(pan * data.length);
-
-    for (let i = 0; i < width; i++) {
-      const index = Math.min(startIndex + i * step, data.length - 1);
-      const value = data[index];
-      const x = i;
-      const y = height / 2 - (value * height / 2);
-      
-      if (i === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
+    const totalDuration = signal.duration;
+    const totalSamples = signal.data.length;
+    
+    const windowDuration = totalDuration / zoom;
+    let windowStartTime;
+    const maxPanTime = Math.max(0, totalDuration - windowDuration);
+    
+    if (isPlaying && isCineMode) {
+      // During playback, signal scrolls from right to left
+      windowStartTime = currentTime;
+      if (windowStartTime + windowDuration > totalDuration) {
+        windowStartTime = totalDuration - windowDuration;
       }
+      if (windowStartTime < 0) {
+        windowStartTime = 0;
+      }
+    } else {
+      // Manual pan mode
+      windowStartTime = pan * maxPanTime;
     }
-
+    
+    const windowEndTime = windowStartTime + windowDuration;
+    const startSample = Math.floor((windowStartTime / totalDuration) * totalSamples);
+    const endSample = Math.ceil((windowEndTime / totalDuration) * totalSamples);
+    
+    // Draw zero line first
+    ctx.strokeStyle = 'rgba(125, 211, 252, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, height / 2);
+    ctx.lineTo(width, height / 2);
     ctx.stroke();
 
-    // Draw current time indicator
-    if (isPlaying && signal.duration) {
-      const timePos = (currentTime / signal.duration) * width;
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 2;
+    // Draw signal with anti-aliasing
+    ctx.strokeStyle = '#7dd3fc';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    
+    let firstPoint = true;
+    const samplesPerPixel = (endSample - startSample) / width;
+    
+    for (let x = 0; x < width; x++) {
+      const sampleIndex = Math.floor(startSample + x * samplesPerPixel);
+      
+      if (sampleIndex >= 0 && sampleIndex < totalSamples) {
+        const amplitude = signal.data[sampleIndex];
+        const y = height / 2 - (amplitude * height / 2 * 0.9);
+        
+        if (firstPoint) {
+          ctx.moveTo(x, y);
+          firstPoint = false;
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+    }
+    ctx.stroke();
+
+    // Draw fixed playhead only during playback
+    if (isPlaying && isCineMode) {
+      const playheadX = 10;
+      
+      // Draw playhead line
+      ctx.strokeStyle = '#00ff88';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = '#00ff88';
+      ctx.shadowBlur = 8;
       ctx.beginPath();
-      ctx.moveTo(timePos, 0);
-      ctx.lineTo(timePos, height);
+      ctx.moveTo(playheadX, 0);
+      ctx.lineTo(playheadX, height);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      
+      // Draw labels
+      ctx.fillStyle = '#00ff88';
+      ctx.font = 'bold 14px Arial';
+      ctx.fillText('▶ NOW', playheadX + 5, 25);
+      
+      ctx.fillStyle = '#00d4ff';
+      ctx.font = '12px monospace';
+      ctx.fillText(`${currentTime.toFixed(2)}s`, playheadX + 5, 45);
+    }
+
+    // Draw time scale at bottom
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px monospace';
+    const numTicks = 5;
+    for (let i = 0; i <= numTicks; i++) {
+      const x = (i / numTicks) * width;
+      const time = windowStartTime + (i / numTicks) * windowDuration;
+      ctx.fillText(`${time.toFixed(1)}s`, x + 2, height - 5);
+      
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.2)';
+      ctx.beginPath();
+      ctx.moveTo(x, height - 20);
+      ctx.lineTo(x, height);
       ctx.stroke();
     }
 
-  }, [signal, isPlaying, currentTime, zoom, pan]);
+  }, [signal, isPlaying, currentTime, zoom, pan, isCineMode]);
+
+  const handleMouseDown = (e) => {
+    if (isPlaying) return;
+    isDraggingRef.current = true;
+    lastMouseXRef.current = e.clientX;
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDraggingRef.current || !onPanChange || isPlaying || zoom <= 1 || !signal) return;
+    
+    const deltaX = e.clientX - lastMouseXRef.current;
+    const canvas = canvasRef.current;
+    
+    const totalDuration = signal.duration;
+    const windowDuration = totalDuration / zoom;
+    const maxPanTime = totalDuration - windowDuration;
+
+    if (maxPanTime <= 0) return;
+
+    const timeDelta = (deltaX / canvas.width) * windowDuration;
+    const currentWindowStartTime = pan * maxPanTime;
+    const newWindowStartTime = currentWindowStartTime - timeDelta;
+    const newPan = newWindowStartTime / maxPanTime;
+    
+    onPanChange(Math.max(0, Math.min(1, newPan)));
+    lastMouseXRef.current = e.clientX;
+  };
+
+  const handleMouseUp = () => {
+    isDraggingRef.current = false;
+  };
+
+  const handleWheel = (e) => {
+    if (!onZoomChange || !onPanChange || !signal || !canvasRef.current) return;
+    
+    e.preventDefault();
+    
+    const canvas = canvasRef.current;
+    const totalDuration = signal.duration;
+
+    const zoomFactor = 1.1;
+    const zoomDelta = e.deltaY < 0 ? zoomFactor : 1 / zoomFactor;
+    const newZoom = Math.max(1, zoom * zoomDelta);
+
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseXFraction = mouseX / canvas.width;
+    
+    const oldWindowDuration = totalDuration / zoom;
+    const oldMaxPanTime = Math.max(0, totalDuration - oldWindowDuration);
+    const oldWindowStartTime = pan * oldMaxPanTime;
+    const timeAtMouse = oldWindowStartTime + (mouseXFraction * oldWindowDuration);
+
+    const newWindowDuration = totalDuration / newZoom;
+    const newMaxPanTime = Math.max(0, totalDuration - newWindowDuration);
+
+    if (newMaxPanTime <= 0) {
+      onZoomChange(1);
+      onPanChange(0);
+      return;
+    }
+
+    const newWindowStartTime = timeAtMouse - (mouseXFraction * newWindowDuration);
+    const newPan = newWindowStartTime / newMaxPanTime;
+    const clampedPan = Math.max(0, Math.min(1, newPan));
+    
+    onZoomChange(newZoom);
+    onPanChange(clampedPan);
+  };
+
+  useEffect(() => {
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => document.removeEventListener('mouseup', handleMouseUp);
+  }, []);
 
   return (
     <div className="signal-viewer">
-      <h3 className="viewer-title">{title}</h3>
+      <div className="viewer-header">
+        <h3 className="viewer-title">{title}</h3>
+        {isPlaying && (
+          <span className="live-indicator">
+            <span className="pulse-dot"></span>
+            LIVE
+          </span>
+        )}
+      </div>
       <canvas
         ref={canvasRef}
         width={900}
         height={300}
         className="signal-canvas"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onWheel={handleWheel}
+        style={{ 
+          cursor: isDraggingRef.current ? 'grabbing' : (isPlaying ? 'default' : 'grab'),
+          imageRendering: 'auto'
+        }}
       />
       {signal && (
         <div className="signal-info">
-          <span>Duration: {signal.duration?.toFixed(2)}s</span>
-          <span>Sample Rate: {signal.sampleRate} Hz</span>
-          <span>Samples: {signal.data?.length}</span>
+          <span>📊 Duration: {signal.duration?.toFixed(2)}s</span>
+          <span>📡 Sample Rate: {signal.sampleRate} Hz</span>
+          <span>🔍 Zoom: {zoom.toFixed(1)}x</span>
+          <span>👁️ Window: {(signal.duration / zoom).toFixed(2)}s</span>
         </div>
       )}
     </div>

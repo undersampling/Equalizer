@@ -1,0 +1,40 @@
+{
+  "mode": "human",
+  "name": "Human Voices Mode",
+  "description": "Control different human voice characteristics",
+  "allowCustomSliders": false,
+  "sliders": [
+    {
+      "id": 1,
+      "label": "👨 Male Voice",
+      "value": 1,
+      "min": 0,
+      "max": 2,
+      "freqRanges": [[85, 180]]
+    },
+    {
+      "id": 2,
+      "label": "👩 Female Voice",
+      "value": 1,
+      "min": 0,
+      "max": 2,
+      "freqRanges": [[165, 255]]
+    },
+    {
+      "id": 3,
+      "label": "👴 Old Person",
+      "value": 1,
+      "min": 0,
+      "max": 2,
+      "freqRanges": [[100, 200]]
+    },
+    {
+      "id": 4,
+      "label": "👦 Young Person",
+      "value": 1,
+      "min": 0,
+      "max": 2,
+      "freqRanges": [[200, 400]]
+    }
+  ]
+}

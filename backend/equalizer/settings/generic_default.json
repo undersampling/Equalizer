@@ -1,0 +1,53 @@
+{
+  "mode": "generic",
+  "sliders": [
+    {
+      "id": 1762558707340,
+      "label": "Range 340",
+      "value": 0.27,
+      "min": 0,
+      "max": 2,
+      "minFreq": 3373,
+      "width": 1627,
+      "freqRanges": [
+        [
+          3373,
+          5000
+        ]
+      ]
+    },
+    {
+      "id": 1762558713857,
+      "label": "Range 857",
+      "value": 1.5,
+      "min": 0,
+      "max": 2,
+      "minFreq": 0,
+      "width": 5000,
+      "freqRanges": [
+        [
+          0,
+          5000
+        ]
+      ]
+    },
+    {
+      "id": 1762558717591,
+      "label": "Range 591",
+      "value": 0.08,
+      "min": 0,
+      "max": 2,
+      "minFreq": 0,
+      "width": 14220,
+      "freqRanges": [
+        [
+          0,
+          14220
+        ]
+      ]
+    }
+  ],
+  "timestamp": "2025-11-08T01:39:28.470157",
+  "presetName": null,
+  "version": "1.0"
+}

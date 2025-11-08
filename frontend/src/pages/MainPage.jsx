@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import EqualizerSlider from "../components/EqualizerSlider";
 import SliderCreationModal from "../components/SliderCreationModal";
@@ -6,15 +5,34 @@ import SignalViewer from "../components/SignalViewer";
 import Spectrogram from "../components/Spectrogram";
 import FourierGraph from "../components/FourierGraph";
 import AIModelSection from "../components/AIModelSection";
-import { getModeConfig } from "../utils/modeConfigs";
+import {
+  getAllModeConfigs,
+  getModeConfig,
+  clearCache,
+  getFallbackConfig,
+  allowsCustomSliders,
+  autoSyncSliders,
+} from "../utils/modeConfigs";
 import { downsampleSignal, limitSignalSize } from "../utils/audioUtils";
+import {
+  saveSettings,
+  loadSettings,
+  importSettings,
+  exportSettings,
+  validateSettings,
+  clearSettings,
+} from "../utils/settingsManager";
 
 function MainPage() {
   const [currentMode, setCurrentMode] = useState("generic");
   const [sliders, setSliders] = useState([]);
+  const [modeConfigs, setModeConfigs] = useState(null);
+  const [isLoadingModes, setIsLoadingModes] = useState(true);
+  const [modeLoadError, setModeLoadError] = useState(null);
+
   const [inputSignal, setInputSignal] = useState(null);
   const [outputSignal, setOutputSignal] = useState(null);
-  const [apiSignal, setApiSignal] = useState(null); // Downsampled signal for API calls
+  const [apiSignal, setApiSignal] = useState(null);
   const [aiModelSignal, setAiModelSignal] = useState(null);
   const [inputFourierData, setInputFourierData] = useState(null);
   const [outputFourierData, setOutputFourierData] = useState(null);
@@ -28,40 +46,130 @@ function MainPage() {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState(0);
   const [showSliderModal, setShowSliderModal] = useState(false);
-  const [comparisonMode, setComparisonMode] = useState(null); // 'ai' or 'slider' or null
-  const [showAIGraphs, setShowAIGraphs] = useState(false); // New state to control AI graphs visibility
-  const [fftError, setFftError] = useState(null); // Error state for FFT
-  const [isLoadingFFT, setIsLoadingFFT] = useState(false); // Loading state for FFT
+  const [comparisonMode, setComparisonMode] = useState(null);
+  const [showAIGraphs, setShowAIGraphs] = useState(false);
+  const [fftError, setFftError] = useState(null);
+  const [isLoadingFFT, setIsLoadingFFT] = useState(false);
 
   const fileInputRef = useRef(null);
   const audioContextRef = useRef(null);
   const equalizationTimeoutRef = useRef(null);
   const fftTimeoutRef = useRef(null);
+  const backendSyncTimeoutRef = useRef(null);
   const isProcessingRef = useRef(false);
   const slidersRef = useRef(sliders);
 
-  // API base URL - try both ports
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-  // Check if current mode supports AI
   const isAIModeEnabled = currentMode === "musical" || currentMode === "human";
 
+  // Load mode configurations on mount
   useEffect(() => {
-    const config = getModeConfig(currentMode);
-    setSliders(config.sliders);
-    slidersRef.current = config.sliders;
-    // Reset AI model signal and comparison mode when mode changes
-    setAiModelSignal(null);
-    setAiModelFourierData(null);
-    setComparisonMode(null);
-    setShowAIGraphs(false);
-    // Note: apiSignal is preserved when mode changes to maintain FFT consistency
-  }, [currentMode]);
+    const loadModeConfigs = async () => {
+      setIsLoadingModes(true);
+      setModeLoadError(null);
+
+      try {
+        console.log("Loading mode configurations from backend...");
+        const configs = await getAllModeConfigs(API_BASE_URL);
+
+        if (!configs || Object.keys(configs).length === 0) {
+          throw new Error("No mode configurations received from backend");
+        }
+
+        console.log("Mode configs loaded successfully:", Object.keys(configs));
+        setModeConfigs(configs);
+
+        if (configs[currentMode]) {
+          const savedSettings = loadSettings(currentMode);
+          if (savedSettings && savedSettings.sliders) {
+            console.log(
+              `Loaded saved settings for ${currentMode} from localStorage`
+            );
+            setSliders(savedSettings.sliders);
+            slidersRef.current = savedSettings.sliders;
+          } else {
+            setSliders(configs[currentMode].sliders);
+            slidersRef.current = configs[currentMode].sliders;
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load mode configs:", error);
+        setModeLoadError(error.message);
+
+        const fallback = getFallbackConfig(currentMode);
+        console.warn("Using fallback configuration for", currentMode);
+        setSliders(fallback.sliders);
+        slidersRef.current = fallback.sliders;
+
+        if (!sessionStorage.getItem("modeConfigErrorShown")) {
+          alert(
+            `Warning: Could not load mode configurations from server.
+` +
+              `Error: ${error.message}
+` +
+              `Using default settings. Please check if backend is running on ${API_BASE_URL}`
+          );
+          sessionStorage.setItem("modeConfigErrorShown", "true");
+        }
+      } finally {
+        setIsLoadingModes(false);
+      }
+    };
+
+    loadModeConfigs();
+  }, []);
 
   // Update sliders ref whenever sliders change
   useEffect(() => {
     slidersRef.current = sliders;
   }, [sliders]);
+
+  // ============================================
+  // AUTO-SAVE: localStorage + Backend Sync
+  // ============================================
+  useEffect(() => {
+    const saveTimeout = setTimeout(() => {
+      if (sliders && sliders.length > 0) {
+        // 1. Save to localStorage (fast, always works)
+        saveSettings(currentMode, sliders);
+        console.log(`✅ Auto-saved to localStorage: ${currentMode}`);
+
+        // 2. Sync to backend modes.json (slower, may fail if offline)
+        if (backendSyncTimeoutRef.current) {
+          clearTimeout(backendSyncTimeoutRef.current);
+        }
+
+        // Debounce backend sync (wait 2 seconds after last change)
+        backendSyncTimeoutRef.current = setTimeout(async () => {
+          try {
+            const success = await autoSyncSliders(
+              currentMode,
+              sliders,
+              API_BASE_URL
+            );
+            if (success) {
+              console.log(
+                `✅ Auto-synced to backend modes.json: ${currentMode}`
+              );
+            }
+          } catch (error) {
+            console.warn(
+              `⚠️ Backend sync failed (continuing offline):`,
+              error.message
+            );
+          }
+        }, 2000); // Wait 2 seconds before syncing to backend
+      }
+    }, 500); // Wait 500ms for localStorage save
+
+    return () => {
+      clearTimeout(saveTimeout);
+      if (backendSyncTimeoutRef.current) {
+        clearTimeout(backendSyncTimeoutRef.current);
+      }
+    };
+  }, [sliders, currentMode, API_BASE_URL]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -72,14 +180,142 @@ function MainPage() {
       if (fftTimeoutRef.current) {
         clearTimeout(fftTimeoutRef.current);
       }
+      if (backendSyncTimeoutRef.current) {
+        clearTimeout(backendSyncTimeoutRef.current);
+      }
     };
   }, []);
 
-  const handleModeChange = (e) => {
+  // Handle mode change
+  const handleModeChange = async (e) => {
     const newMode = e.target.value;
     setCurrentMode(newMode);
-    const config = getModeConfig(newMode);
-    setSliders(config.sliders);
+
+    try {
+      const savedSettings = loadSettings(newMode);
+
+      if (savedSettings && savedSettings.sliders) {
+        console.log(`Switching to ${newMode} mode - loaded saved settings`);
+        setSliders(savedSettings.sliders);
+        slidersRef.current = savedSettings.sliders;
+      } else if (modeConfigs && modeConfigs[newMode]) {
+        console.log(`Switching to ${newMode} mode - using backend config`);
+        setSliders(modeConfigs[newMode].sliders);
+        slidersRef.current = modeConfigs[newMode].sliders;
+      } else {
+        console.log(`Fetching fresh config for ${newMode} mode`);
+        const config = await getModeConfig(newMode, API_BASE_URL);
+        setSliders(config.sliders);
+        slidersRef.current = config.sliders;
+      }
+
+      setAiModelSignal(null);
+      setAiModelFourierData(null);
+      setComparisonMode(null);
+      setShowAIGraphs(false);
+
+      if (inputSignal && apiSignal) {
+        setTimeout(() => applyEqualization(), 100);
+      }
+    } catch (error) {
+      console.error(`Failed to load config for ${newMode}:`, error);
+
+      const fallback = getFallbackConfig(newMode);
+      setSliders(fallback.sliders);
+      slidersRef.current = fallback.sliders;
+    }
+  };
+
+  // ============================================
+  // RESET TO DEFAULTS - Refresh Mode Configurations
+  // ============================================
+  const handleRefreshModeConfigs = async () => {
+    const confirmReset = confirm(
+      `🔄 Reset to Default Configuration?
+` +
+        `This will:
+` +
+        `• Reset backend modes.json to default values
+` +
+        `• Clear all localStorage settings
+` +
+        `• Remove all custom sliders in Generic mode
+` +
+        `• Reset all slider values to 1.0
+` +
+        `Your presets in Settings will NOT be affected.
+` +
+        `Do you want to continue?`
+    );
+
+    if (!confirmReset) {
+      return;
+    }
+
+    clearCache();
+    setIsLoadingModes(true);
+    setModeLoadError(null);
+
+    try {
+      console.log("Resetting to default configuration...");
+
+      // 1. Call backend reset API
+      const resetResponse = await fetch(`${API_BASE_URL}/api/modes/reset`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!resetResponse.ok) {
+        throw new Error("Failed to reset backend configuration");
+      }
+
+      const resetResult = await resetResponse.json();
+      console.log("Backend reset successful:", resetResult);
+
+      // 2. Clear ALL localStorage settings
+      const modes = ["generic", "musical", "animal", "human"];
+      modes.forEach((mode) => {
+        clearSettings(mode);
+      });
+      console.log("✅ Cleared all localStorage settings");
+
+      // 3. Fetch fresh configs from backend
+      const configs = await getAllModeConfigs(API_BASE_URL, true);
+      setModeConfigs(configs);
+
+      // 4. Apply default config for current mode
+      if (configs[currentMode]) {
+        setSliders(configs[currentMode].sliders);
+        slidersRef.current = configs[currentMode].sliders;
+        console.log(`✅ Reset ${currentMode} mode to defaults`);
+      }
+
+      alert(
+        "✅ Reset Successful" +
+          "All modes have been reset to default configuration:" +
+          "• Generic mode: No sliders" +
+          "• All other modes: Slider values reset to 1.0"
+      );
+
+      // 5. Apply equalization with reset config
+      if (inputSignal && apiSignal) {
+        setTimeout(() => applyEqualization(), 100);
+      }
+    } catch (error) {
+      console.error("Failed to reset mode configs:", error);
+      setModeLoadError(error.message);
+      alert(
+        `❌ Reset Failed
+` +
+          `Error: ${error.message}
+` +
+          `Please check if backend is running on ${API_BASE_URL}`
+      );
+    } finally {
+      setIsLoadingModes(false);
+    }
   };
 
   const handleFileUpload = (e) => {
@@ -100,20 +336,18 @@ function MainPage() {
         );
 
         const channelData = audioBuffer.getChannelData(0);
-        
-        // Store original signal for display
+
         const originalSignal = {
           data: Array.from(channelData),
           sampleRate: audioBuffer.sampleRate,
           duration: audioBuffer.duration,
         };
 
-        // Downsample for API calls to prevent memory issues
         const downsampled = downsampleSignal(
           channelData,
           audioBuffer.sampleRate,
-          16000, // Target sample rate
-          100000 // Max samples
+          16000,
+          100000
         );
 
         const apiSignal = {
@@ -122,18 +356,15 @@ function MainPage() {
           duration: audioBuffer.duration,
         };
 
-        // Use original for display, but downsampled for API
         setInputSignal(originalSignal);
         setOutputSignal(originalSignal);
-        setApiSignal(apiSignal); // Store downsampled signal for API calls
+        setApiSignal(apiSignal);
         setCurrentTime(0);
-        // Reset AI model output and comparison when new file is loaded
         setAiModelSignal(null);
         setAiModelFourierData(null);
         setComparisonMode(null);
         setShowAIGraphs(false);
 
-        // Use downsampled signal for API calls - both should use same signal
         computeFourierTransform(apiSignal, "input");
         computeFourierTransform(apiSignal, "output");
       } catch (error) {
@@ -146,17 +377,16 @@ function MainPage() {
 
   const computeFourierTransform = async (signal, type) => {
     if (!signal || !signal.data || signal.data.length === 0) {
-      console.warn('No signal data to compute FFT');
+      console.warn("No signal data to compute FFT");
       setFftError(null);
       return;
     }
 
-    // Limit signal size before sending
     const limitedSignal = limitSignalSize(signal.data, 100000);
-    
+
     if (limitedSignal.length === 0) {
-      console.warn('Signal is empty after limiting');
-      setFftError('Signal is too large or empty');
+      console.warn("Signal is empty after limiting");
+      setFftError("Signal is too large or empty");
       setIsLoadingFFT(false);
       return;
     }
@@ -170,10 +400,11 @@ function MainPage() {
         sampleRate: signal.sampleRate,
       };
 
-      // Check request size
       const requestSize = JSON.stringify(requestBody).length;
-      if (requestSize > 50 * 1024 * 1024) { // 50MB limit
-        throw new Error('Signal is too large to process. Please use a shorter audio file.');
+      if (requestSize > 50 * 1024 * 1024) {
+        throw new Error(
+          "Signal is too large to process. Please use a shorter audio file."
+        );
       }
 
       const response = await fetch(`${API_BASE_URL}/api/fft`, {
@@ -188,7 +419,6 @@ function MainPage() {
           const errorData = await response.json();
           errorMessage = errorData.error || errorMessage;
         } catch (e) {
-          // If response isn't JSON, use status text
           errorMessage = `${response.status}: ${response.statusText}`;
         }
         throw new Error(errorMessage);
@@ -196,26 +426,23 @@ function MainPage() {
 
       const result = await response.json();
 
-      // Validate response structure
       if (!result.frequencies || !result.magnitudes) {
-        console.error('Invalid FFT response format:', result);
-        throw new Error('Invalid response format from FFT API');
+        console.error("Invalid FFT response format:", result);
+        throw new Error("Invalid response format from FFT API");
       }
 
-      // Ensure arrays are not empty
       if (result.frequencies.length === 0 || result.magnitudes.length === 0) {
-        console.warn('FFT returned empty arrays');
-        setFftError('FFT returned empty arrays');
+        console.warn("FFT returned empty arrays");
+        setFftError("FFT returned empty arrays");
         setIsLoadingFFT(false);
         return;
       }
 
       console.log(`FFT computed for ${type}:`, {
         frequencies: result.frequencies.length,
-        magnitudes: result.magnitudes.length
+        magnitudes: result.magnitudes.length,
       });
 
-      // Safely update state with error handling
       try {
         if (type === "input") {
           setInputFourierData(result);
@@ -227,17 +454,19 @@ function MainPage() {
         setIsLoadingFFT(false);
         setFftError(null);
       } catch (stateError) {
-        console.error('Error updating FFT state:', stateError);
+        console.error("Error updating FFT state:", stateError);
         setIsLoadingFFT(false);
-        setFftError('Failed to display FFT data. Data may be too large.');
+        setFftError("Failed to display FFT data. Data may be too large.");
       }
     } catch (error) {
       console.error("Error computing FFT:", error);
       setIsLoadingFFT(false);
-      const errorMsg = error.message || 'Failed to fetch FFT data. Make sure the backend is running on ' + API_BASE_URL;
+      const errorMsg =
+        error.message ||
+        "Failed to fetch FFT data. Make sure the backend is running on " +
+          API_BASE_URL;
       setFftError(errorMsg);
-      
-      // Clear the fourier data on error
+
       if (type === "input") {
         setInputFourierData(null);
       } else if (type === "output") {
@@ -249,21 +478,17 @@ function MainPage() {
   };
 
   const handleSliderChange = (sliderId, newValue) => {
-    // Update state immediately for responsive UI
     setSliders((prev) =>
       prev.map((slider) =>
         slider.id === sliderId ? { ...slider, value: newValue } : slider
       )
     );
 
-    // Debounce the API call - only process after user stops moving slider
     if (inputSignal && apiSignal) {
-      // Clear existing timeout
       if (equalizationTimeoutRef.current) {
         clearTimeout(equalizationTimeoutRef.current);
       }
-      
-      // Set new timeout for debounced equalization (150ms delay)
+
       equalizationTimeoutRef.current = setTimeout(() => {
         applyEqualization();
       }, 150);
@@ -272,26 +497,23 @@ function MainPage() {
 
   const applyEqualization = useCallback(async () => {
     if (!inputSignal || !apiSignal) return;
-    
-    // Prevent multiple simultaneous calls
+
     if (isProcessingRef.current) {
       return;
     }
-    
+
     isProcessingRef.current = true;
 
     try {
-      // Get current sliders from ref to ensure we have the latest values
       const currentSliders = slidersRef.current;
-      
-      // Use downsampled signal for equalization API call to match FFT processing
+
       const response = await fetch(`${API_BASE_URL}/api/equalize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          signal: apiSignal.data, // Use downsampled signal for API consistency
+          signal: apiSignal.data,
           sampleRate: apiSignal.sampleRate,
-          sliders: currentSliders, // Use latest sliders from ref
+          sliders: currentSliders,
           mode: currentMode,
         }),
       });
@@ -308,52 +530,49 @@ function MainPage() {
       }
 
       const result = await response.json();
-      
-      // Validate response
+
       if (!result.outputSignal || !Array.isArray(result.outputSignal)) {
-        throw new Error('Invalid response from equalization API');
+        throw new Error("Invalid response from equalization API");
       }
-      
-      // Create output signal with downsampled data from API
+
       const newOutputApiSignal = {
         data: result.outputSignal,
         sampleRate: apiSignal.sampleRate,
         duration: inputSignal.duration,
       };
-      
-      // Update output signal
+
       setOutputSignal({
         data: result.outputSignal,
         sampleRate: apiSignal.sampleRate,
         duration: inputSignal.duration,
       });
-      
-      // Debounce FFT computation to avoid excessive calls
+
       if (fftTimeoutRef.current) {
         clearTimeout(fftTimeoutRef.current);
       }
-      
+
       fftTimeoutRef.current = setTimeout(() => {
-        // Compute Fourier transform for output signal using the same downsampled format
         computeFourierTransform(newOutputApiSignal, "output");
-      }, 200); // Slightly longer delay for FFT since it's less critical for real-time feel
+      }, 200);
     } catch (error) {
       console.error("Error applying equalization:", error);
-      // Don't show alert on every error - just log it
-      // alert(`Equalization failed: ${error.message}. Make sure the backend is running on ${API_BASE_URL}`);
     } finally {
       isProcessingRef.current = false;
     }
   }, [inputSignal, apiSignal, currentMode, API_BASE_URL]);
 
   const handleAddSlider = () => {
+    const currentConfig = modeConfigs?.[currentMode];
+    if (currentConfig && !allowsCustomSliders(currentConfig)) {
+      alert(`${currentConfig.name} does not allow custom sliders.`);
+      return;
+    }
     setShowSliderModal(true);
   };
 
   const handleCreateSlider = (newSlider) => {
     setSliders([...sliders, newSlider]);
     setShowSliderModal(false);
-    // Apply equalization after creating slider (with debounce)
     if (equalizationTimeoutRef.current) {
       clearTimeout(equalizationTimeoutRef.current);
     }
@@ -364,7 +583,6 @@ function MainPage() {
 
   const handleRemoveSlider = (sliderId) => {
     setSliders((prev) => prev.filter((s) => s.id !== sliderId));
-    // Apply equalization after removing slider (with debounce)
     if (equalizationTimeoutRef.current) {
       clearTimeout(equalizationTimeoutRef.current);
     }
@@ -450,45 +668,44 @@ function MainPage() {
   };
 
   const handleSaveSettings = () => {
-    const settings = {
-      mode: currentMode,
-      sliders: sliders,
-    };
-    const blob = new Blob([JSON.stringify(settings, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `equalizer_settings_${currentMode}.json`;
-    a.click();
+    const presetName = prompt("Enter preset name (optional):");
+    exportSettings(currentMode, sliders, presetName || null);
   };
 
-  const handleLoadSettings = (e) => {
+  const handleLoadSettings = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const settings = JSON.parse(event.target.result);
-        setCurrentMode(settings.mode);
-        setSliders(settings.sliders);
-        // Apply equalization after loading settings
-        setTimeout(() => applyEqualization(), 100);
-      } catch (error) {
-        console.error("Error loading settings:", error);
-        alert("Invalid settings file");
+    try {
+      const settings = await importSettings(file);
+
+      if (!validateSettings(settings)) {
+        alert("Invalid settings file format");
+        return;
       }
-    };
-    reader.readAsText(file);
+
+      setCurrentMode(settings.mode);
+      setSliders(settings.sliders);
+      slidersRef.current = settings.sliders;
+
+      saveSettings(settings.mode, settings.sliders);
+
+      if (inputSignal && apiSignal) {
+        setTimeout(() => applyEqualization(), 100);
+      }
+
+      alert("Settings loaded successfully!");
+    } catch (error) {
+      console.error("Error loading settings:", error);
+      alert(`Failed to load settings: ${error.message}`);
+    }
   };
 
   const handleAIModelResult = (aiSignal) => {
     setAiModelSignal(aiSignal);
-    setShowAIGraphs(true); // Show AI graphs when processing is complete
-    setComparisonMode(null); // Reset comparison mode
-    
+    setShowAIGraphs(true);
+    setComparisonMode(null);
+
     if (aiSignal.fourierData) {
       setAiModelFourierData(aiSignal.fourierData);
     } else {
@@ -500,15 +717,19 @@ function MainPage() {
     setComparisonMode(mode);
   };
 
-  // Determine grid layout based on comparison mode and AI graphs visibility
   const getGridColumns = () => {
     if (comparisonMode) {
-      return '1fr 1fr'; // Show only 2 columns when comparing
+      return "1fr 1fr";
     }
     if (showAIGraphs && aiModelSignal) {
-      return 'repeat(3, 1fr)'; // Show 3 columns when AI output exists and graphs are visible
+      return "repeat(3, 1fr)";
     }
-    return '1fr 1fr'; // Default 2 columns
+    return "1fr 1fr";
+  };
+
+  const canAddCustomSliders = () => {
+    if (!modeConfigs || !modeConfigs[currentMode]) return false;
+    return allowsCustomSliders(modeConfigs[currentMode]);
   };
 
   return (
@@ -517,17 +738,36 @@ function MainPage() {
         <div className="header-content">
           <div className="header-left">
             <h1>🎵 Signal Equalizer</h1>
-            <select
-              className="mode-selector"
-              value={currentMode}
-              onChange={handleModeChange}
-            >
-              <option value="generic">Generic Mode</option>
-              <option value="musical">Musical Instruments</option>
-              <option value="animal">Animal Sounds</option>
-              <option value="human">Human Voices</option>
-            </select>
+
+            {isLoadingModes ? (
+              <div className="mode-loading">⏳ Loading modes...</div>
+            ) : (
+              <div className="mode-selector-container">
+                <select
+                  className="mode-selector"
+                  value={currentMode}
+                  onChange={handleModeChange}
+                  disabled={isLoadingModes}
+                >
+                  <option value="generic">⚙️ Generic Mode</option>
+                  <option value="musical">🎵 Musical Instruments</option>
+                  <option value="animal">🐾 Animal Sounds</option>
+                  <option value="human">👤 Human Voices</option>
+                </select>
+
+                {modeLoadError && (
+                  <span
+                    className="mode-error"
+                    title={`Error: ${modeLoadError}
+Using fallback configuration`}
+                  >
+                    ⚠️ Offline Mode
+                  </span>
+                )}
+              </div>
+            )}
           </div>
+
           <div className="header-buttons">
             <button
               className="btn"
@@ -542,14 +782,25 @@ function MainPage() {
               accept="audio/*,.wav,.mp3"
               onChange={handleFileUpload}
             />
-            <button className="btn btn-secondary" onClick={handleSaveSettings}>
-              💾 Save Settings
+
+            <button
+              className="btn btn-secondary"
+              onClick={handleRefreshModeConfigs}
+              disabled={isLoadingModes}
+              title="Reset all modes to default configuration"
+            >
+              🔄 Reset to Defaults
             </button>
+
+            <button className="btn btn-secondary" onClick={handleSaveSettings}>
+              💾 Export Settings
+            </button>
+
             <button
               className="btn btn-secondary"
               onClick={() => document.getElementById("loadSettings").click()}
             >
-              📂 Load Settings
+              📂 Import Settings
             </button>
             <input
               id="loadSettings"
@@ -562,7 +813,6 @@ function MainPage() {
         </div>
       </header>
 
-      {/* Slider Creation Modal */}
       {showSliderModal && (
         <SliderCreationModal
           onCreate={handleCreateSlider}
@@ -571,7 +821,6 @@ function MainPage() {
       )}
 
       <div className="main-container">
-        {/* AI Model Section - Only show in musical or human mode */}
         {isAIModeEnabled && (
           <AIModelSection
             mode={currentMode}
@@ -584,30 +833,36 @@ function MainPage() {
           />
         )}
 
-        {/* Equalizer Sliders */}
         <section className="section">
           <h2 className="section-title">
-            ⚙️ Equalizer -{" "}
-            {currentMode.charAt(0).toUpperCase() + currentMode.slice(1)} Mode
+            {modeConfigs?.[currentMode]?.icon || "⚙️"} Equalizer -{" "}
+            {modeConfigs?.[currentMode]?.name || "Unknown Mode"}
           </h2>
+
+          {modeConfigs?.[currentMode]?.description && (
+            <p className="mode-description">
+              {modeConfigs[currentMode].description}
+            </p>
+          )}
+
           <div className="equalizer-sliders">
             {sliders.map((slider) => (
               <EqualizerSlider
                 key={slider.id}
                 slider={slider}
                 onChange={handleSliderChange}
-                onRemove={currentMode === "generic" ? handleRemoveSlider : null}
+                onRemove={canAddCustomSliders() ? handleRemoveSlider : null}
               />
             ))}
           </div>
-          {currentMode === "generic" && (
+
+          {canAddCustomSliders() && (
             <button className="add-slider-btn" onClick={handleAddSlider}>
-              ➕ Add Slider
+              ➕ Add Custom Slider
             </button>
           )}
         </section>
 
-        {/* Playback Controls */}
         <section className="controls-panel">
           <div className="controls-row">
             <button className="control-btn play" onClick={handlePlay}>
@@ -643,11 +898,11 @@ function MainPage() {
           </div>
         </section>
 
-        {/* Audio Play Buttons */}
         <div
           className="audio-buttons"
           style={{
-            gridTemplateColumns: showAIGraphs && aiModelSignal ? "1fr 1fr 1fr" : "1fr 1fr",
+            gridTemplateColumns:
+              showAIGraphs && aiModelSignal ? "1fr 1fr 1fr" : "1fr 1fr",
           }}
         >
           <button className="audio-btn" onClick={handlePlayInputAudio}>
@@ -669,7 +924,6 @@ function MainPage() {
           )}
         </div>
 
-        {/* Signal Viewers */}
         <div
           className="viewers-grid"
           style={{
@@ -726,7 +980,6 @@ function MainPage() {
           )}
         </div>
 
-        {/* Fourier Transform Graphs */}
         <section className="section">
           <div className="fourier-section">
             <h2 className="section-title">📊 Fourier Transform</h2>
@@ -795,7 +1048,6 @@ function MainPage() {
           </div>
         </section>
 
-        {/* Spectrograms */}
         <section className="spectrograms-controls">
           <h2 className="section-title">📈 Spectrograms</h2>
           <button

@@ -1,0 +1,43 @@
+{
+  "mode": "musical",
+  "name": "Musical Instruments Mode",
+  "description": "Control individual musical instruments",
+  "allowCustomSliders": false,
+  "sliders": [
+    {
+      "id": 1,
+      "label": "🎸 Guitar",
+      "value": 1,
+      "min": 0,
+      "max": 2,
+      "freqRanges": [[82, 1175]]
+    },
+    {
+      "id": 2,
+      "label": "🎹 Piano",
+      "value": 1,
+      "min": 0,
+      "max": 2,
+      "freqRanges": [[27, 4186]]
+    },
+    {
+      "id": 3,
+      "label": "🥁 Drums",
+      "value": 1,
+      "min": 0,
+      "max": 2,
+      "freqRanges": [
+        [50, 200],
+        [2000, 5000]
+      ]
+    },
+    {
+      "id": 4,
+      "label": "🎻 Violin",
+      "value": 1,
+      "min": 0,
+      "max": 2,
+      "freqRanges": [[196, 3136]]
+    }
+  ]
+}

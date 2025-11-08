@@ -1,0 +1,99 @@
+# ----------------------------------------------------------------
+# Python & Django (Backend)
+# ----------------------------------------------------------------
+
+# Virtual Environment
+# This is the most important one for 'venv'
+venv/
+*.venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Django-specific
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+
+# ----------------------------------------------------------------
+# Node & React (Frontend)
+# ----------------------------------------------------------------
+
+# Node modules
+# This is the most important one for React/Node
+node_modules/
+
+# Build outputs
+build/
+dist/
+.next/
+.nuxt/
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment variables
+# IMPORTANT: Never commit your API keys or secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# Dependency directories (ideally not needed if using .npmrc)
+.pnp
+.pnp.js
+
+# ----------------------------------------------------------------
+# General OS & Editor Files
+# ----------------------------------------------------------------
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE / Editor config
+.idea/
+.vscode/
+*.swp
+*~

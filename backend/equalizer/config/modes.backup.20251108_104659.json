@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "lastUpdated": "2025-11-08T10:48:23.920068",
+  "lastUpdated": "2025-11-08T10:46:49.564483",
   "modes": {
     "generic": {
       "mode": "generic",
@@ -20,7 +20,7 @@
         {
           "id": 1,
           "label": "🎸 Guitar",
-          "value": 1,
+          "value": 0,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -33,7 +33,7 @@
         {
           "id": 2,
           "label": "🎹 Piano",
-          "value": 1,
+          "value": 0.11,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -46,7 +46,7 @@
         {
           "id": 3,
           "label": "🥁 Drums",
-          "value": 1,
+          "value": 0.92,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -63,7 +63,7 @@
         {
           "id": 4,
           "label": "🎻 Violin",
-          "value": 1,
+          "value": 0,
           "min": 0,
           "max": 2,
           "freqRanges": [

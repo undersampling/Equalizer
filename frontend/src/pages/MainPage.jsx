@@ -5,6 +5,7 @@ import SignalViewer from "../components/SignalViewer";
 import Spectrogram from "../components/Spectrogram";
 import FourierGraph from "../components/FourierGraph";
 import AIModelSection from "../components/AIModelSection";
+import UnifiedMusicController from "../components/UnifiedMusicController";
 import {
   getAllModeConfigs,
   getModeConfig,
@@ -37,6 +38,8 @@ function MainPage() {
   const [inputFourierData, setInputFourierData] = useState(null);
   const [outputFourierData, setOutputFourierData] = useState(null);
   const [aiModelFourierData, setAiModelFourierData] = useState(null);
+  const [isAIMode, setIsAIMode] = useState(false);
+  const [aiStems, setAiStems] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -324,7 +327,82 @@ function MainPage() {
       setIsLoadingModes(false);
     }
   };
+const handleAIToggle = (enabled, stems) => {
+  setIsAIMode(enabled);
+  setAiStems(stems);
+  
+  if (enabled && stems) {
+    // Apply AI mixing when AI mode is enabled
+    applyAIMixing();
+  } else {
+    // Fall back to frequency-based equalization
+    applyEqualization();
+  }
+};
 
+// Add new function for AI mixing (after applyEqualization):
+const applyAIMixing = useCallback(async () => {
+  if (!inputSignal || !aiStems) return;
+
+  if (isProcessingRef.current) return;
+  isProcessingRef.current = true;
+
+  try {
+    const currentSliders = slidersRef.current;
+    
+    // Map sliders to stems with gains
+    const stemsWithGains = {};
+    currentSliders.forEach(slider => {
+      const stemName = slider.aiStem; // e.g., "drums", "bass", etc.
+      if (stemName && aiStems[stemName]) {
+        stemsWithGains[stemName] = {
+          data: aiStems[stemName].data,
+          gain: slider.value
+        };
+      }
+    });
+
+    const response = await fetch(`${API_BASE_URL}/api/music/mix`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        stems: stemsWithGains,
+        sampleRate: inputSignal.sampleRate
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to mix AI stems");
+    }
+
+    const result = await response.json();
+
+    const newOutputSignal = {
+      data: result.mixedSignal,
+      sampleRate: result.sampleRate,
+      duration: inputSignal.duration,
+    };
+
+    setOutputSignal(newOutputSignal);
+    setAiModelSignal(newOutputSignal);
+    setShowAIGraphs(true);
+
+    // Compute FFT for AI output
+    if (fftTimeoutRef.current) {
+      clearTimeout(fftTimeoutRef.current);
+    }
+
+    fftTimeoutRef.current = setTimeout(() => {
+      computeFourierTransform(newOutputSignal, "output");
+      computeFourierTransform(newOutputSignal, "ai");
+    }, 200);
+
+  } catch (error) {
+    console.error("Error applying AI mixing:", error);
+  } finally {
+    isProcessingRef.current = false;
+  }
+}, [inputSignal, aiStems, API_BASE_URL]);
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -488,23 +566,28 @@ function MainPage() {
     }
   };
 
-  const handleSliderChange = (sliderId, newValue) => {
-    setSliders((prev) =>
-      prev.map((slider) =>
-        slider.id === sliderId ? { ...slider, value: newValue } : slider
-      )
-    );
+const handleSliderChange = (sliderId, newValue) => {
+  setSliders((prev) =>
+    prev.map((slider) =>
+      slider.id === sliderId ? { ...slider, value: newValue } : slider
+    )
+  );
 
-    if (inputSignal && apiSignal) {
-      if (equalizationTimeoutRef.current) {
-        clearTimeout(equalizationTimeoutRef.current);
-      }
-
-      equalizationTimeoutRef.current = setTimeout(() => {
-        applyEqualization();
-      }, 150);
+  if (inputSignal && apiSignal) {
+    if (equalizationTimeoutRef.current) {
+      clearTimeout(equalizationTimeoutRef.current);
     }
-  };
+
+    equalizationTimeoutRef.current = setTimeout(() => {
+      // Use AI mixing if in AI mode, otherwise frequency-based
+      if (isAIMode && aiStems) {
+        applyAIMixing();
+      } else {
+        applyEqualization();
+      }
+    }, 150);
+  }
+};
 
   const applyEqualization = useCallback(async () => {
     if (!inputSignal || !apiSignal) return;
@@ -843,16 +926,52 @@ Using fallback configuration`}
             onComparisonChange={handleComparisonChange}
           />
         )}
-
+        {currentMode === "musical" && (
+          <UnifiedMusicController
+            inputSignal={inputSignal}
+            sliders={sliders}
+            onSliderChange={handleSliderChange}
+            onAIToggle={handleAIToggle}
+            isAIEnabled={isAIMode}
+          />
+        )}
+        
         <section className="section">
-          <h2 className="section-title">
-            {modeConfigs?.[currentMode]?.icon || "⚙️"} Equalizer -{" "}
-            {modeConfigs?.[currentMode]?.name || "Unknown Mode"}
-          </h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 className="section-title">
+              {modeConfigs?.[currentMode]?.icon || "⚙️"} Equalizer -{" "}
+              {modeConfigs?.[currentMode]?.name || "Unknown Mode"}
+            </h2>
+            
+            {currentMode === "musical" && inputSignal && (
+              <button
+                className={`btn ${isAIMode ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => {
+                  const newMode = !isAIMode;
+                  setIsAIMode(newMode);
+                  handleAIToggle(newMode, aiStems);
+                }}
+                style={{
+                  background: isAIMode 
+                    ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' 
+                    : undefined
+                }}
+              >
+                {isAIMode ? '🤖 AI Mode (ON)' : '🎛️ Switch to AI Mode'}
+              </button>
+            )}
+          </div>
 
           {modeConfigs?.[currentMode]?.description && (
             <p className="mode-description">
               {modeConfigs[currentMode].description}
+              {currentMode === "musical" && (
+                <span style={{ display: 'block', marginTop: '8px', fontStyle: 'italic', opacity: 0.9 }}>
+                  {isAIMode 
+                    ? "🤖 Using AI stem separation - sliders control individual instruments" 
+                    : "🎛️ Using frequency-based equalization"}
+                </span>
+              )}
             </p>
           )}
 
@@ -873,7 +992,6 @@ Using fallback configuration`}
             </button>
           )}
         </section>
-
         <section className="controls-panel">
           <div className="controls-row">
             <button className="control-btn play" onClick={handlePlay}>

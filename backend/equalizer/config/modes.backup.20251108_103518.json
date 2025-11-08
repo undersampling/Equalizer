@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "lastUpdated": "2025-11-08T10:48:23.920068",
+  "lastUpdated": "2025-11-08T10:33:23.020933",
   "modes": {
     "generic": {
       "mode": "generic",
@@ -8,7 +8,53 @@
       "description": "Custom frequency bands with user-defined sliders",
       "allowCustomSliders": true,
       "icon": "⚙️",
-      "sliders": []
+      "sliders": [
+        {
+          "id": 1762562799758,
+          "label": "Range 758",
+          "value": 1,
+          "min": 0,
+          "max": 2,
+          "minFreq": 0,
+          "width": 5000,
+          "freqRanges": [
+            [
+              0,
+              5000
+            ]
+          ]
+        },
+        {
+          "id": 1762562804707,
+          "label": "Range 707",
+          "value": 1,
+          "min": 0,
+          "max": 2,
+          "minFreq": 0,
+          "width": 13254,
+          "freqRanges": [
+            [
+              0,
+              13254
+            ]
+          ]
+        },
+        {
+          "id": 1762562809725,
+          "label": "Range 725",
+          "value": 1,
+          "min": 0,
+          "max": 2,
+          "minFreq": 0,
+          "width": 16374,
+          "freqRanges": [
+            [
+              0,
+              16374
+            ]
+          ]
+        }
+      ]
     },
     "musical": {
       "mode": "musical",

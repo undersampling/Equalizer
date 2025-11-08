@@ -1,7 +1,5 @@
-
-
 from django.urls import path
-from .views import compute_fft, compute_spectrogram_view, equalize_signal
+from .views import compute_fft, compute_spectrogram_view, equalize_signal, separate_music_ai, apply_stem_mixing
 from . import config_views, settings_views
 
 
@@ -10,7 +8,8 @@ urlpatterns = [
     path('fft', compute_fft, name='compute_fft'),
     path('spectrogram', compute_spectrogram_view, name='compute_spectrogram'),
     path('equalize', equalize_signal, name='equalize_signal'),
-
+    path('separate', separate_music_ai, name='separate_music'),
+    path('mix', apply_stem_mixing, name='mix_stems'),
     # Mode configuration endpoints
     path('modes/all', config_views.get_all_modes, name='get_all_modes'),
     path('modes/config', config_views.get_mode_config, name='get_mode_config'),

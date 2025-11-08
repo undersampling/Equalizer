@@ -2,3 +2,7 @@ django
 numpy
 djangorestframework
 django-cors-headers
+scipy
+demucs
+torch==2.7.1
+torchaudio==2.7.1

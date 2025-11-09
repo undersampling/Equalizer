@@ -12,6 +12,39 @@ from django.conf import settings
 from scipy.io import wavfile
 import json
 
+# Voice separation imports
+import torch
+import torchaudio
+from speechbrain.inference.separation import SepformerSeparation
+
+os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
+
+if not hasattr(torchaudio, 'list_audio_backends'):
+    torchaudio.list_audio_backends = lambda: []
+    torchaudio.get_audio_backend = lambda: "sox_io"
+    torchaudio.set_audio_backend = lambda x: None
+
+# Global voice separation model instance (load once)
+_voice_separation_model = None
+
+def get_voice_separation_model():
+    """Lazy load the voice separation model"""
+    global _voice_separation_model
+    if _voice_separation_model is None:
+        print("Loading voice separation model...")
+        try:
+            _voice_separation_model = SepformerSeparation.from_hparams(
+                source="speechbrain/sepformer-wsj03mix",
+                savedir='pretrained_models/sepformer-wsj03mix',
+                run_opts={"device": "cuda" if torch.cuda.is_available() else "cpu"},
+                use_auth_token=False
+            )
+            print("Voice separation model loaded successfully!")
+        except Exception as e:
+            print(f"Error loading voice separation model: {e}")
+            raise
+    return _voice_separation_model
+
 
 @api_view(['POST'])
 def separate_music_ai(request):
@@ -448,5 +481,204 @@ def equalize_signal(request):
     except Exception as e:
         return Response(
             {'error': f'Equalization failed: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+def separate_voices_ai(request):
+    """
+    Separate human voices using SpeechBrain SepformerSeparation
+    Expected payload:
+    {
+        "signal": [array of floats],
+        "sampleRate": float
+    }
+    Returns:
+    {
+        "voices": {
+            "voice_0": {"data": [...], "sampleRate": float},
+            "voice_1": {"data": [...], "sampleRate": float},
+            "voice_2": {"data": [...], "sampleRate": float}
+        },
+        "originalSampleRate": float
+    }
+    """
+    try:
+        signal_data = request.data.get('signal', [])
+        sample_rate = int(request.data.get('sampleRate', 44100))
+
+        if not signal_data:
+            return Response(
+                {'error': 'Signal data is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Convert to numpy array
+        signal = np.array(signal_data, dtype=np.float32)
+
+        # Handle NaN or Inf values
+        if np.any(np.isnan(signal)) or np.any(np.isinf(signal)):
+            signal = np.nan_to_num(signal, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # Normalize signal to prevent clipping
+        if np.max(np.abs(signal)) > 1.0:
+            signal = signal / np.max(np.abs(signal)) * 0.95
+
+        # Convert to torch tensor (1D -> 2D: [1, samples])
+        mixed_tensor = torch.from_numpy(signal).unsqueeze(0)
+
+        # Downsample to 8kHz for separation (model requirement)
+        model_sample_rate = 8000
+        if sample_rate != model_sample_rate:
+            resampler = torchaudio.transforms.Resample(sample_rate, model_sample_rate)
+            mixed_tensor_8k = resampler(mixed_tensor)
+        else:
+            mixed_tensor_8k = mixed_tensor
+
+        # Separate voices
+        model = get_voice_separation_model()
+        est_sources = model.separate_batch(mixed_tensor_8k)
+        separated_sources = est_sources[0].cpu()  # Get first batch item
+        
+        # Handle different tensor shapes from SpeechBrain
+        # Shape could be [1, samples, num_voices] or [samples, num_voices]
+        if len(separated_sources.shape) == 3:
+            # Shape: [1, samples, num_voices]
+            separated_sources = separated_sources.squeeze(0)  # Remove batch dimension: [samples, num_voices]
+        elif len(separated_sources.shape) == 2:
+            # Shape: [samples, num_voices] - already correct
+            pass
+        else:
+            raise ValueError(f"Unexpected tensor shape: {separated_sources.shape}")
+        
+        # Now separated_sources should be [samples, num_voices]
+        num_samples, num_voices = separated_sources.shape
+
+        # Upsample back to original sample rate
+        if sample_rate != model_sample_rate:
+            resampler_up = torchaudio.transforms.Resample(model_sample_rate, sample_rate)
+            # Resample first voice to get the output length
+            first_voice_8k = separated_sources[:, 0].unsqueeze(0)  # [1, samples]
+            first_voice_up = resampler_up(first_voice_8k)
+            upsampled_length = first_voice_up.shape[1]
+            
+            # Create tensor for upsampled voices
+            separated_sources_up = torch.zeros(upsampled_length, num_voices)
+            separated_sources_up[:, 0] = first_voice_up.squeeze(0)
+            
+            # Resample remaining voices
+            for i in range(1, num_voices):
+                voice_8k = separated_sources[:, i].unsqueeze(0)  # [1, samples]
+                voice_up = resampler_up(voice_8k)
+                separated_sources_up[:, i] = voice_up.squeeze(0)  # [samples]
+            separated_sources = separated_sources_up
+
+        # Convert to numpy and extract voices
+        voices_data = {}
+        
+        for i in range(num_voices):
+            voice_tensor = separated_sources[:, i]  # [samples]
+            voice_array = voice_tensor.numpy().astype(np.float32)
+            
+            # Normalize each voice
+            max_val = np.max(np.abs(voice_array))
+            if max_val > 0:
+                voice_array = voice_array / max_val * 0.95
+            
+            voices_data[f"voice_{i}"] = {
+                'data': voice_array.tolist(),
+                'sampleRate': sample_rate
+            }
+
+        return Response({
+            'voices': voices_data,
+            'originalSampleRate': sample_rate,
+            'numVoices': num_voices
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response(
+            {'error': f'Voice separation failed: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+def mix_voices_with_gains(request):
+    """
+    Mix separated voices with individual gain controls (0.0 to 2.0)
+    Expected payload:
+    {
+        "voices": {
+            "voice_0": {"data": [...], "gain": float},
+            "voice_1": {"data": [...], "gain": float},
+            "voice_2": {"data": [...], "gain": float}
+        },
+        "sampleRate": float
+    }
+    Returns:
+    {
+        "mixedSignal": [array of floats],
+        "sampleRate": float
+    }
+    """
+    try:
+        voices_data = request.data.get('voices', {})
+        sample_rate = request.data.get('sampleRate', 44100)
+
+        if not voices_data:
+            return Response(
+                {'error': 'Voices data is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Initialize mixed signal
+        mixed_signal = None
+        max_length = 0
+
+        # First pass: find maximum length
+        for voice_name, voice_info in voices_data.items():
+            voice_data = np.array(voice_info.get('data', []), dtype=np.float32)
+            max_length = max(max_length, len(voice_data))
+
+        if max_length == 0:
+            return Response(
+                {'error': 'No valid voice data found'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Second pass: mix all voices with gains
+        mixed_signal = np.zeros(max_length, dtype=np.float32)
+
+        for voice_name, voice_info in voices_data.items():
+            voice_data = np.array(voice_info.get('data', []), dtype=np.float32)
+            gain = float(voice_info.get('gain', 1.0))
+            
+            # Clamp gain to [0, 2]
+            gain = np.clip(gain, 0.0, 2.0)
+
+            # Pad shorter voices with zeros
+            if len(voice_data) < max_length:
+                voice_data = np.pad(voice_data, (0, max_length - len(voice_data)), mode='constant')
+
+            # Apply gain and add to mix
+            mixed_signal += voice_data * gain
+
+        # Normalize to prevent clipping
+        max_val = np.max(np.abs(mixed_signal))
+        if max_val > 1.0:
+            mixed_signal = mixed_signal / max_val * 0.95
+
+        return Response({
+            'mixedSignal': mixed_signal.tolist(),
+            'sampleRate': sample_rate
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response(
+            {'error': f'Voice mixing failed: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

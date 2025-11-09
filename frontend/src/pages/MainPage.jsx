@@ -1738,9 +1738,65 @@ function MainPage() {
     equalizationTimeoutRef.current = setTimeout(() => applyEqualization(), 100);
   };
 
-  const handlePlayInputAudio = () => inputSignal && playAudio(inputSignal);
-  const handlePlayOutputAudio = () => outputSignal && playAudio(outputSignal);
-  const handlePlayAIAudio = () => aiModelSignal && playAudio(aiModelSignal);
+  const handlePlayInputAudio = () => {
+    let signalToPlay = inputSignal;
+    
+    // Update signal based on comparison mode
+    if (comparisonMode === "equalizer_vs_ai") {
+      signalToPlay = allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
+    } else {
+      signalToPlay = inputSignal;
+    }
+    
+    if (signalToPlay && signalToPlay.data && signalToPlay.data.length > 0) {
+      playAudio(signalToPlay);
+    }
+  };
+
+  const handlePlayOutputAudio = () => {
+    let signalToPlay = outputSignal;
+    
+    // Update signal based on comparison mode
+    if (comparisonMode === "ai") {
+      signalToPlay = aiModelSignal;
+    } else if (comparisonMode === "slider") {
+      signalToPlay = allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
+    } else if (comparisonMode === "equalizer_vs_ai") {
+      signalToPlay = aiModelSignal;
+    } else {
+      signalToPlay = outputSignal;
+    }
+    
+    if (signalToPlay && signalToPlay.data && signalToPlay.data.length > 0) {
+      playAudio(signalToPlay);
+    }
+  };
+
+  const getFirstButtonLabel = () => {
+    if (comparisonMode === "equalizer_vs_ai") {
+      return "🔊 Play Equalizer Output";
+    } else {
+      return "🔊 Play Input Audio";
+    }
+  };
+
+  const getSecondButtonLabel = () => {
+    if (comparisonMode === "ai") {
+      return "🔊 Play AI Output";
+    } else if (comparisonMode === "slider") {
+      return "🔊 Play Equalizer Output";
+    } else if (comparisonMode === "equalizer_vs_ai") {
+      return "🔊 Play AI Output";
+    } else {
+      return "🔊 Play Manual EQ Output";
+    }
+  };
+
+  const handlePlayAIAudio = () => {
+    if (aiModelSignal) {
+      playAudio(aiModelSignal);
+    }
+  };
 
   const playAudio = (signal) => {
     if (!audioContextRef.current) {
@@ -1769,6 +1825,8 @@ function MainPage() {
   const handleAIModelResult = (aiSignal) => {
     setAiModelSignal(aiSignal);
     setShowAIGraphs(true);
+    // Reset comparison mode when AI signal is updated (e.g., after remixing voices)
+    // This makes buttons return to default labels and signals
     setComparisonMode(null);
     if (aiSignal.fourierData) setAiModelFourierData(aiSignal.fourierData);
     else computeFourierTransform(aiSignal, "ai");
@@ -1777,8 +1835,8 @@ function MainPage() {
   const handleComparisonChange = (mode) => setComparisonMode(mode);
 
   const getGridColumns = () => {
-    if (comparisonMode) return "1fr 1fr";
-    if (showAIGraphs && aiModelSignal) return "repeat(3, 1fr)";
+    // Always show 2 columns (Original vs Equalizer by default)
+    // Only show 2 columns when comparison mode is active
     return "1fr 1fr";
   };
 
@@ -1827,6 +1885,7 @@ function MainPage() {
           <AIModelSection
             mode={currentMode}
             inputSignal={inputSignal}
+            outputSignal={outputSignal}
             sliderOutputSignal={outputSignal}
             inputFourierData={inputFourierData}
             sliderFourierData={outputFourierData}
@@ -1916,36 +1975,51 @@ function MainPage() {
         </section>
 
         <LinkedSignalViewers
-          inputSignal={inputSignal}
-          outputSignal={outputSignal}
+          inputSignal={
+            comparisonMode === "equalizer_vs_ai" 
+              ? (allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal)
+              : inputSignal
+          }
+          outputSignal={
+            comparisonMode === "ai" 
+              ? aiModelSignal 
+              : comparisonMode === "slider"
+              ? (allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal)
+              : comparisonMode === "equalizer_vs_ai"
+              ? aiModelSignal
+              : outputSignal
+          }
           aiModelSignal={aiModelSignal}
-          showAIViewer={aiStems && aiModelSignal}
+          showAIViewer={false}
+          comparisonMode={comparisonMode}
+          inputTitle={
+            comparisonMode === "equalizer_vs_ai" 
+              ? "Equalizer Output" 
+              : "Input Signal (Original)"
+          }
+          outputTitle={
+            comparisonMode === "ai" 
+              ? "AI Model Output" 
+              : comparisonMode === "slider"
+              ? "Equalizer Output"
+              : comparisonMode === "equalizer_vs_ai"
+              ? "AI Model Output"
+              : "Equalizer Output"
+          }
         />
 
         <div
           className="audio-buttons"
           style={{
-            gridTemplateColumns:
-              aiStems && aiModelSignal ? "1fr 1fr 1fr" : "1fr 1fr",
+            gridTemplateColumns: "1fr 1fr",
           }}
         >
           <button className="audio-btn" onClick={handlePlayInputAudio}>
-            🔊 Play Input Audio
+            {getFirstButtonLabel()}
           </button>
           <button className="audio-btn" onClick={handlePlayOutputAudio}>
-            🔊 Play Manual EQ Output
+            {getSecondButtonLabel()}
           </button>
-          {aiStems && aiModelSignal && (
-            <button
-              className="audio-btn"
-              onClick={handlePlayAIAudio}
-              style={{
-                background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
-              }}
-            >
-              🔊 Play AI Stems Output
-            </button>
-          )}
         </div>
 
         <section className="section">
@@ -1969,9 +2043,19 @@ function MainPage() {
             style={{ gridTemplateColumns: getGridColumns() }}
           >
             <FourierGraph
-              fourierData={inputFourierData}
+              fourierData={
+                comparisonMode === "equalizer_vs_ai" ? outputFourierData : inputFourierData
+              }
               scale={fftScale}
-              title="Input FFT (Original)"
+              title={
+                comparisonMode === "equalizer_vs_ai" 
+                  ? "Equalizer FFT" 
+                  : comparisonMode === "ai"
+                  ? "Input FFT (Original)"
+                  : comparisonMode === "slider"
+                  ? "Input FFT (Original)"
+                  : "Input FFT (Original)"
+              }
               isLoading={isLoadingFFT}
               error={fftError}
             />
@@ -1991,25 +2075,22 @@ function MainPage() {
                 isLoading={isLoadingFFT}
                 error={fftError}
               />
+            ) : comparisonMode === "equalizer_vs_ai" && aiModelFourierData ? (
+              <FourierGraph
+                fourierData={aiModelFourierData}
+                scale={fftScale}
+                title="AI Model FFT"
+                isLoading={isLoadingFFT}
+                error={fftError}
+              />
             ) : (
-              <>
-                <FourierGraph
-                  fourierData={outputFourierData}
-                  scale={fftScale}
-                  title="Slider Output FFT"
-                  isLoading={isLoadingFFT}
-                  error={fftError}
-                />
-                {showAIGraphs && aiModelFourierData && (
-                  <FourierGraph
-                    fourierData={aiModelFourierData}
-                    scale={fftScale}
-                    title="AI Model FFT"
-                    isLoading={isLoadingFFT}
-                    error={fftError}
-                  />
-                )}
-              </>
+              <FourierGraph
+                fourierData={outputFourierData}
+                scale={fftScale}
+                title="Slider Output FFT"
+                isLoading={isLoadingFFT}
+                error={fftError}
+              />
             )}
           </div>
         </section>
@@ -2030,8 +2111,20 @@ function MainPage() {
             style={{ gridTemplateColumns: getGridColumns() }}
           >
             <Spectrogram
-              signal={inputSignal}
-              title="Input Spectrogram (Original)"
+              signal={
+                comparisonMode === "equalizer_vs_ai" 
+                  ? (allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal)
+                  : inputSignal
+              }
+              title={
+                comparisonMode === "equalizer_vs_ai" 
+                  ? "Equalizer Spectrogram" 
+                  : comparisonMode === "ai"
+                  ? "Input Spectrogram (Original)"
+                  : comparisonMode === "slider"
+                  ? "Input Spectrogram (Original)"
+                  : "Input Spectrogram (Original)"
+              }
               visible={showSpectrograms}
             />
             {comparisonMode === "ai" && aiModelSignal ? (
@@ -2050,25 +2143,18 @@ function MainPage() {
                 title="Equalizer Spectrogram"
                 visible={showSpectrograms}
               />
+            ) : comparisonMode === "equalizer_vs_ai" && aiModelSignal ? (
+              <Spectrogram
+                signal={aiModelSignal}
+                title="AI Model Spectrogram"
+                visible={showSpectrograms}
+              />
             ) : (
-              <>
-                <Spectrogram
-                  signal={
-                    allSlidersAtUnity() && inputSignal
-                      ? inputSignal
-                      : outputSignal
-                  }
-                  title="Slider Output Spectrogram"
-                  visible={showSpectrograms}
-                />
-                {showAIGraphs && aiModelSignal && (
-                  <Spectrogram
-                    signal={aiModelSignal}
-                    title="AI Model Spectrogram"
-                    visible={showSpectrograms}
-                  />
-                )}
-              </>
+              <Spectrogram
+                signal={allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal}
+                title="Slider Output Spectrogram"
+                visible={showSpectrograms}
+              />
             )}
           </div>
         )}

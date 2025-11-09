@@ -8,6 +8,9 @@ function LinkedSignalViewers({
   outputSignal,
   aiModelSignal,
   showAIViewer = false,
+  comparisonMode = null,
+  inputTitle = "Input Signal (Original)",
+  outputTitle = "Equalizer Output"
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -362,7 +365,7 @@ function LinkedSignalViewers({
       >
         <SignalViewer
           signal={inputSignal}
-          title="Input Signal (Original)"
+          title={inputTitle}
           isPlaying={isPlaying}
           currentTime={currentTime}
           zoom={zoom}
@@ -374,7 +377,7 @@ function LinkedSignalViewers({
 
         <SignalViewer
           signal={outputSignal}
-          title="Equalizer Output"
+          title={outputTitle}
           isPlaying={isPlaying}
           currentTime={currentTime}
           zoom={zoom}

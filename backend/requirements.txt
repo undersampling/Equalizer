@@ -6,3 +6,5 @@ scipy
 demucs
 torch==2.7.1
 torchaudio==2.7.1
+speechbrain==1.0.0
+huggingface-hub==0.35.3

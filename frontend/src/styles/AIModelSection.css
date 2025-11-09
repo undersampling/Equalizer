@@ -133,7 +133,125 @@
   font-size: 14px;
 }
 
+.voice-separation-controls {
+  margin-top: 20px;
+  padding: 15px;
+  background: rgba(139, 92, 246, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.voice-separation-title {
+  color: #a78bfa;
+  font-size: 16px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.voice-sliders-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.voice-slider-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.voice-slider-label {
+  color: #e0e0e0;
+  font-size: 13px;
+  min-width: 60px;
+  font-weight: 500;
+}
+
+.voice-slider-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.voice-play-btn {
+  padding: 6px 12px;
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: 6px;
+  color: #a78bfa;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+  min-width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.voice-play-btn:hover {
+  background: rgba(139, 92, 246, 0.3);
+  border-color: #8b5cf6;
+  transform: scale(1.05);
+}
+
+.voice-play-btn:active {
+  transform: scale(0.95);
+}
+
+.voice-slider {
+  flex: 1;
+  height: 6px;
+  background: rgba(139, 92, 246, 0.3);
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.voice-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.4);
+}
+
+.voice-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.4);
+}
+
+.voice-slider-value {
+  color: #a78bfa;
+  font-size: 12px;
+  min-width: 40px;
+  text-align: right;
+  font-weight: 600;
+}
+
+.comparison-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
 /* Responsive */
+@media (max-width: 1024px) {
+  .comparison-buttons {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   .ai-controls {
     flex-direction: column;

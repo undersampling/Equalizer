@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
-import "./UnifiedMusicController.css";
+import "../styles/UnifiedMusicController.css";
 
-function UnifiedMusicController({ 
-  inputSignal, 
-  sliders, 
+function UnifiedMusicController({
+  inputSignal,
+  sliders,
   onSliderChange,
   onAIToggle,
-  isAIEnabled 
+  isAIEnabled,
 }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [separatedStems, setSeparatedStems] = useState(null);
@@ -39,7 +39,7 @@ function UnifiedMusicController({
         body: JSON.stringify({
           signal: inputSignal.data,
           sampleRate: inputSignal.sampleRate,
-          stems: ["drums", "bass", "vocals", "piano", "guitar", "other"]
+          stems: ["drums", "bass", "vocals", "piano", "guitar", "other"],
         }),
       });
 
@@ -51,12 +51,11 @@ function UnifiedMusicController({
       const result = await response.json();
       setSeparatedStems(result.stems);
       setProgress("✅ AI separation complete!");
-      
+
       // Notify parent that stems are ready
       if (onAIToggle) {
         onAIToggle(true, result.stems);
       }
-
     } catch (err) {
       console.error("Music separation error:", err);
       setError(err.message);
@@ -80,19 +79,17 @@ function UnifiedMusicController({
     <div className="unified-music-controller">
       <div className="controller-header">
         <div className="mode-indicator">
-          <span className={`mode-badge ${isAIEnabled ? 'ai-mode' : 'manual-mode'}`}>
-            {isAIEnabled ? '🤖 AI Mode' : '🎛️ Manual Mode'}
+          <span
+            className={`mode-badge ${isAIEnabled ? "ai-mode" : "manual-mode"}`}
+          >
+            {isAIEnabled ? "🤖 AI Mode" : "🎛️ Manual Mode"}
           </span>
           <span className="mode-description">{getSliderMode()}</span>
         </div>
 
-        {progress && (
-          <div className="progress-message">{progress}</div>
-        )}
-        
-        {error && (
-          <div className="error-message">❌ {error}</div>
-        )}
+        {progress && <div className="progress-message">{progress}</div>}
+
+        {error && <div className="error-message">❌ {error}</div>}
       </div>
 
       {isProcessing && (

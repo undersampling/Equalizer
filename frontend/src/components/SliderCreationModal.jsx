@@ -1,6 +1,6 @@
 // components/SliderCreationModal.jsx
 import React, { useState } from "react";
-import "./SliderCreationModal.css";
+import "../styles/SliderCreationModal.css";
 
 function SliderCreationModal({ onCreate, onCancel }) {
   const [sliderName, setSliderName] = useState("");

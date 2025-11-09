@@ -1,7 +1,0 @@
-{
-  "mode": "generic",
-  "name": "Generic Mode",
-  "description": "Custom frequency bands with user-defined sliders",
-  "allowCustomSliders": true,
-  "sliders": []
-}

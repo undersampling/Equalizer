@@ -1,6 +1,5 @@
 {
   "version": "1.0",
-  "lastUpdated": "2025-11-08T10:46:49.564483",
   "modes": {
     "generic": {
       "mode": "generic",
@@ -20,58 +19,37 @@
         {
           "id": 1,
           "label": "🎸 Guitar",
-          "value": 0,
+          "value": 1,
           "min": 0,
           "max": 2,
-          "freqRanges": [
-            [
-              82,
-              1175
-            ]
-          ]
+          "freqRanges": [[82, 1175]]
         },
         {
           "id": 2,
           "label": "🎹 Piano",
-          "value": 0.11,
+          "value": 1,
           "min": 0,
           "max": 2,
-          "freqRanges": [
-            [
-              27,
-              4186
-            ]
-          ]
+          "freqRanges": [[27, 4186]]
         },
         {
           "id": 3,
           "label": "🥁 Drums",
-          "value": 0.92,
+          "value": 1,
           "min": 0,
           "max": 2,
           "freqRanges": [
-            [
-              50,
-              200
-            ],
-            [
-              2000,
-              5000
-            ]
+            [50, 200],
+            [2000, 5000]
           ]
         },
         {
           "id": 4,
           "label": "🎻 Violin",
-          "value": 0,
+          "value": 1,
           "min": 0,
           "max": 2,
-          "freqRanges": [
-            [
-              196,
-              3136
-            ]
-          ]
+          "freqRanges": [[196, 3136]]
         }
       ]
     },
@@ -88,12 +66,7 @@
           "value": 1,
           "min": 0,
           "max": 2,
-          "freqRanges": [
-            [
-              500,
-              1000
-            ]
-          ]
+          "freqRanges": [[500, 1000]]
         },
         {
           "id": 2,
@@ -101,12 +74,7 @@
           "value": 1,
           "min": 0,
           "max": 2,
-          "freqRanges": [
-            [
-              700,
-              1500
-            ]
-          ]
+          "freqRanges": [[300, 600]]
         },
         {
           "id": 3,
@@ -114,12 +82,7 @@
           "value": 1,
           "min": 0,
           "max": 2,
-          "freqRanges": [
-            [
-              2000,
-              8000
-            ]
-          ]
+          "freqRanges": [[2000, 8000]]
         },
         {
           "id": 4,
@@ -127,12 +90,7 @@
           "value": 1,
           "min": 0,
           "max": 2,
-          "freqRanges": [
-            [
-              150,
-              500
-            ]
-          ]
+          "freqRanges": [[150, 500]]
         }
       ]
     },
@@ -149,12 +107,7 @@
           "value": 1,
           "min": 0,
           "max": 2,
-          "freqRanges": [
-            [
-              85,
-              180
-            ]
-          ]
+          "freqRanges": [[85, 180]]
         },
         {
           "id": 2,
@@ -162,12 +115,7 @@
           "value": 1,
           "min": 0,
           "max": 2,
-          "freqRanges": [
-            [
-              165,
-              255
-            ]
-          ]
+          "freqRanges": [[165, 255]]
         },
         {
           "id": 3,
@@ -175,12 +123,7 @@
           "value": 1,
           "min": 0,
           "max": 2,
-          "freqRanges": [
-            [
-              100,
-              200
-            ]
-          ]
+          "freqRanges": [[100, 200]]
         },
         {
           "id": 4,
@@ -188,12 +131,7 @@
           "value": 1,
           "min": 0,
           "max": 2,
-          "freqRanges": [
-            [
-              200,
-              400
-            ]
-          ]
+          "freqRanges": [[200, 400]]
         }
       ]
     }

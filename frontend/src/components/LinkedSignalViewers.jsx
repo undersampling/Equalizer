@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import SignalViewer from './SignalViewer';
-import CineController from './CineController';
-import './LinkedSignalViewers.css';
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import SignalViewer from "./SignalViewer";
+import CineController from "./CineController";
+import "../styles/LinkedSignalViewers.css";
 
-function LinkedSignalViewers({ 
-  inputSignal, 
-  outputSignal, 
+function LinkedSignalViewers({
+  inputSignal,
+  outputSignal,
   aiModelSignal,
-  showAIViewer = false 
+  showAIViewer = false,
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -73,7 +73,8 @@ function LinkedSignalViewers({
       // FIXED: Update time immediately when playing starts (Issue #2)
       if (audioSourceRef.current && audioContextRef.current) {
         // Audio is playing - sync with audio time
-        const elapsed = audioContextRef.current.currentTime - startTimeRef.current;
+        const elapsed =
+          audioContextRef.current.currentTime - startTimeRef.current;
         accumulatedTimeRef.current = elapsed;
         setCurrentTime(elapsed);
       } else {
@@ -163,14 +164,23 @@ function LinkedSignalViewers({
     setIsPlaying(true);
     setIsPaused(false);
     lastFrameTimeRef.current = null;
-  }, [inputSignal, outputSignal, isPlayingOriginal, playbackSpeed, isPaused, isPlaying, stopCurrentAudio]);
+  }, [
+    inputSignal,
+    outputSignal,
+    isPlayingOriginal,
+    playbackSpeed,
+    isPaused,
+    isPlaying,
+    stopCurrentAudio,
+  ]);
 
   const handlePause = useCallback(() => {
     if (!isPlaying) return;
 
     // FIXED: Calculate and save current position (Issue #3)
     if (audioSourceRef.current && audioContextRef.current) {
-      const elapsed = audioContextRef.current.currentTime - startTimeRef.current;
+      const elapsed =
+        audioContextRef.current.currentTime - startTimeRef.current;
       pausedAtRef.current = elapsed;
       accumulatedTimeRef.current = elapsed;
       setCurrentTime(elapsed);
@@ -195,15 +205,18 @@ function LinkedSignalViewers({
     pausedAtRef.current = 0; // FIXED: Reset pause position
   }, [stopCurrentAudio]);
 
-  const handleSpeedChange = useCallback((e) => {
-    const newSpeed = parseFloat(e.target.value);
-    setPlaybackSpeed(newSpeed);
+  const handleSpeedChange = useCallback(
+    (e) => {
+      const newSpeed = parseFloat(e.target.value);
+      setPlaybackSpeed(newSpeed);
 
-    // Update playback speed if currently playing
-    if (isPlaying && audioSourceRef.current) {
-      audioSourceRef.current.playbackRate.value = newSpeed;
-    }
-  }, [isPlaying]);
+      // Update playback speed if currently playing
+      if (isPlaying && audioSourceRef.current) {
+        audioSourceRef.current.playbackRate.value = newSpeed;
+      }
+    },
+    [isPlaying]
+  );
 
   // Toggle between original and equalized audio during playback
   const handleToggleAudioSource = useCallback(() => {
@@ -215,7 +228,8 @@ function LinkedSignalViewers({
     // FIXED: Save current position before switching (Issue #3)
     let currentPosition = pausedAtRef.current;
     if (wasPlaying && audioSourceRef.current && audioContextRef.current) {
-      currentPosition = audioContextRef.current.currentTime - startTimeRef.current;
+      currentPosition =
+        audioContextRef.current.currentTime - startTimeRef.current;
     } else if (!wasPlaying) {
       currentPosition = currentTime;
     }
@@ -280,7 +294,15 @@ function LinkedSignalViewers({
         lastFrameTimeRef.current = null;
       }, 50);
     }
-  }, [inputSignal, outputSignal, isPlaying, isPlayingOriginal, currentTime, playbackSpeed, stopCurrentAudio]);
+  }, [
+    inputSignal,
+    outputSignal,
+    isPlaying,
+    isPlayingOriginal,
+    currentTime,
+    playbackSpeed,
+    stopCurrentAudio,
+  ]);
 
   const handleZoomIn = useCallback(() => {
     setZoom((prev) => Math.min(prev * 1.5, 20));
@@ -298,11 +320,14 @@ function LinkedSignalViewers({
     pausedAtRef.current = 0; // FIXED: Reset pause position
   }, []);
 
-  const handlePanChange = useCallback((newPan) => {
-    if (!isPlaying) {
-      setPan(newPan);
-    }
-  }, [isPlaying]);
+  const handlePanChange = useCallback(
+    (newPan) => {
+      if (!isPlaying) {
+        setPan(newPan);
+      }
+    },
+    [isPlaying]
+  );
 
   const handleZoomChange = useCallback((newZoom) => {
     setZoom(newZoom);
@@ -311,7 +336,7 @@ function LinkedSignalViewers({
   return (
     <div className="linked-viewers-container">
       <h2 className="section-title">📺 Linked Cine Signal Viewers</h2>
-      
+
       <CineController
         isPlaying={isPlaying}
         isPaused={isPaused}
@@ -329,10 +354,10 @@ function LinkedSignalViewers({
         isPlayingOriginal={isPlayingOriginal}
       />
 
-      <div 
-        className="viewers-grid" 
-        style={{ 
-          gridTemplateColumns: showAIViewer ? 'repeat(3, 1fr)' : '1fr 1fr' 
+      <div
+        className="viewers-grid"
+        style={{
+          gridTemplateColumns: showAIViewer ? "repeat(3, 1fr)" : "1fr 1fr",
         }}
       >
         <SignalViewer
@@ -346,7 +371,7 @@ function LinkedSignalViewers({
           onZoomChange={handleZoomChange}
           isCineMode={true}
         />
-        
+
         <SignalViewer
           signal={outputSignal}
           title="Equalizer Output"

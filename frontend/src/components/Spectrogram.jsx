@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import './Spectrogram.css';
+import '../styles/Spectrogram.css';
 import { limitSignalSize } from '../utils/audioUtils';
 
 function Spectrogram({ signal, title, visible }) {

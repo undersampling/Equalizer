@@ -1,6 +1,6 @@
 // components/FourierGraph.jsx
 import React, { useEffect, useRef } from 'react';
-import './FourierGraph.css';
+import '../styles/FourierGraph.css';
 
 function FourierGraph({ fourierData, scale = 'linear', title = 'Fourier Transform', isLoading, error }) {
   const canvasRef = useRef(null);

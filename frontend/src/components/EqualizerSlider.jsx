@@ -1,6 +1,6 @@
 // components/EqualizerSlider.jsx
 import React, { useMemo } from "react";
-import "./EqualizerSlider.css";
+import "../styles/EqualizerSlider.css";
 
 function EqualizerSlider({ slider, onChange, onRemove }) {
   const handleValueChange = (e) => {

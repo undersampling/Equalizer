@@ -1,6 +1,5 @@
 {
   "version": "1.0",
-  "lastUpdated": "2025-11-09T21:29:45.178422",
   "modes": {
     "generic": {
       "mode": "generic",
@@ -8,23 +7,7 @@
       "description": "Custom frequency bands with user-defined sliders",
       "allowCustomSliders": true,
       "icon": "⚙️",
-      "sliders": [
-        {
-          "id": 1762716571157,
-          "label": "Range 157",
-          "value": 0,
-          "min": 0,
-          "max": 2,
-          "minFreq": 0,
-          "width": 1813,
-          "freqRanges": [
-            [
-              0,
-              1813
-            ]
-          ]
-        }
-      ]
+      "sliders": []
     },
     "musical": {
       "mode": "musical",
@@ -119,15 +102,15 @@
           "max": 2,
           "freqRanges": [
             [
-              700,
-              1500
+              300,
+              600
             ]
           ]
         },
         {
           "id": 3,
           "label": "🐦 Bird",
-          "value": 1,
+          "value": 0.23,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -213,5 +196,6 @@
         }
       ]
     }
-  }
+  },
+  "lastUpdated": "2025-11-09T23:28:36.377890"
 }

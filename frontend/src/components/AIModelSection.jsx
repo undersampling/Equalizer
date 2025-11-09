@@ -1,7 +1,11 @@
-
 import React, { useState } from "react";
 
-function AIModelSection({ mode, inputSignal, onModelResult, onComparisonChange }) {
+function AIModelSection({
+  mode,
+  inputSignal,
+  onModelResult,
+  onComparisonChange,
+}) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showComparison, setShowComparison] = useState(false);
   const [comparisonMode, setComparisonMode] = useState(null);
@@ -68,24 +72,34 @@ function AIModelSection({ mode, inputSignal, onModelResult, onComparisonChange }
 
           <div className="comparison-buttons">
             <button
-              className={`comparison-btn ${comparisonMode === "ai" ? "active" : ""}`}
+              className={`comparison-btn ${
+                comparisonMode === "ai" ? "active" : ""
+              }`}
               onClick={() => handleComparison("ai")}
             >
               <span className="comparison-icon">🤖</span>
               <div className="comparison-btn-content">
                 <div className="comparison-btn-title">Original vs AI</div>
-                <div className="comparison-btn-subtitle">AI processed output</div>
+                <div className="comparison-btn-subtitle">
+                  AI processed output
+                </div>
               </div>
             </button>
 
             <button
-              className={`comparison-btn ${comparisonMode === "slider" ? "active" : ""}`}
+              className={`comparison-btn ${
+                comparisonMode === "slider" ? "active" : ""
+              }`}
               onClick={() => handleComparison("slider")}
             >
               <span className="comparison-icon">⚙️</span>
               <div className="comparison-btn-content">
-                <div className="comparison-btn-title">Original vs Equalizer</div>
-                <div className="comparison-btn-subtitle">Slider processed output</div>
+                <div className="comparison-btn-title">
+                  Original vs Equalizer
+                </div>
+                <div className="comparison-btn-subtitle">
+                  Slider processed output
+                </div>
               </div>
             </button>
           </div>
@@ -93,7 +107,8 @@ function AIModelSection({ mode, inputSignal, onModelResult, onComparisonChange }
           {comparisonMode && (
             <div className="comparison-info">
               <div className="info-badge">
-                Viewing: Original vs {comparisonMode === "ai" ? "AI Model" : "Equalizer"}
+                Viewing: Original vs{" "}
+                {comparisonMode === "ai" ? "AI Model" : "Equalizer"}
               </div>
             </div>
           )}

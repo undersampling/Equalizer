@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "lastUpdated": "2025-11-09T21:29:45.178422",
+  "lastUpdated": "2025-11-09T21:20:44.415330",
   "modes": {
     "generic": {
       "mode": "generic",
@@ -10,17 +10,17 @@
       "icon": "⚙️",
       "sliders": [
         {
-          "id": 1762716571157,
-          "label": "Range 157",
-          "value": 0,
+          "id": 1762716041645,
+          "label": "Range 645",
+          "value": 1,
           "min": 0,
           "max": 2,
           "minFreq": 0,
-          "width": 1813,
+          "width": 5000,
           "freqRanges": [
             [
               0,
-              1813
+              5000
             ]
           ]
         }

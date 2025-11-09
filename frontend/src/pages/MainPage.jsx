@@ -590,73 +590,78 @@ const handleSliderChange = (sliderId, newValue) => {
   }
 };
 
-  const applyEqualization = useCallback(async () => {
-    if (!inputSignal || !apiSignal) return;
+  // In MainPage.jsx, find the applyEqualization function and replace it with this:
 
-    if (isProcessingRef.current) {
-      return;
+const applyEqualization = useCallback(async () => {
+  if (!inputSignal || !apiSignal) return;
+
+  if (isProcessingRef.current) {
+    return;
+  }
+
+  isProcessingRef.current = true;
+
+  try {
+    const currentSliders = slidersRef.current;
+
+    const response = await fetch(`${API_BASE_URL}/api/equalize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        signal: apiSignal.data,
+        sampleRate: apiSignal.sampleRate,
+        sliders: currentSliders,
+        mode: currentMode,
+      }),
+    });
+
+    if (!response.ok) {
+      let errorMessage = `HTTP error! status: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (e) {
+        errorMessage = `${response.status}: ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
 
-    isProcessingRef.current = true;
+    const result = await response.json();
 
-    try {
-      const currentSliders = slidersRef.current;
-
-      const response = await fetch(`${API_BASE_URL}/api/equalize`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          signal: apiSignal.data,
-          sampleRate: apiSignal.sampleRate,
-          sliders: currentSliders,
-          mode: currentMode,
-        }),
-      });
-
-      if (!response.ok) {
-        let errorMessage = `HTTP error! status: ${response.status}`;
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorMessage;
-        } catch (e) {
-          errorMessage = `${response.status}: ${response.statusText}`;
-        }
-        throw new Error(errorMessage);
-      }
-
-      const result = await response.json();
-
-      if (!result.outputSignal || !Array.isArray(result.outputSignal)) {
-        throw new Error("Invalid response from equalization API");
-      }
-
-      const newOutputApiSignal = {
-        data: result.outputSignal,
-        sampleRate: apiSignal.sampleRate,
-        duration: inputSignal.duration,
-      };
-
-      setOutputSignal({
-        data: result.outputSignal,
-        sampleRate: apiSignal.sampleRate,
-        duration: inputSignal.duration,
-      });
-
-      if (fftTimeoutRef.current) {
-        clearTimeout(fftTimeoutRef.current);
-      }
-
-      fftTimeoutRef.current = setTimeout(() => {
-        computeFourierTransform(newOutputApiSignal, "output");
-      }, 200);
-    } catch (error) {
-      console.error("Error applying equalization:", error);
-    } finally {
-      isProcessingRef.current = false;
+    if (!result.outputSignal || !Array.isArray(result.outputSignal)) {
+      throw new Error("Invalid response from equalization API");
     }
-  }, [inputSignal, apiSignal, currentMode, API_BASE_URL]);
 
-  const handleAddSlider = () => {
+    // ✅ CRITICAL FIX: Use the SAME sampleRate from the response (which should match input)
+    // This ensures the output signal has the correct metadata for spectrogram computation
+    const newOutputApiSignal = {
+      data: result.outputSignal,
+      sampleRate: result.sampleRate || apiSignal.sampleRate, // Use returned sampleRate
+      duration: inputSignal.duration,
+    };
+
+    // ✅ FIXED: Set output signal with correct sample rate
+    setOutputSignal({
+      data: result.outputSignal,
+      sampleRate: result.sampleRate || apiSignal.sampleRate, // Use returned sampleRate
+      duration: inputSignal.duration,
+    });
+
+    if (fftTimeoutRef.current) {
+      clearTimeout(fftTimeoutRef.current);
+    }
+
+    fftTimeoutRef.current = setTimeout(() => {
+      computeFourierTransform(newOutputApiSignal, "output");
+    }, 200);
+  } catch (error) {
+    console.error("Error applying equalization:", error);
+  } finally {
+    isProcessingRef.current = false;
+  }
+}, [inputSignal, apiSignal, currentMode, API_BASE_URL]);
+
+const handleAddSlider = () => {
     const currentConfig = modeConfigs?.[currentMode];
     if (currentConfig && !allowsCustomSliders(currentConfig)) {
       alert(`${currentConfig.name} does not allow custom sliders.`);
@@ -825,6 +830,12 @@ const handleSliderChange = (sliderId, newValue) => {
   const canAddCustomSliders = () => {
     if (!modeConfigs || !modeConfigs[currentMode]) return false;
     return allowsCustomSliders(modeConfigs[currentMode]);
+  };
+
+  // Check if all sliders have value 1.0 (no equalization applied)
+  const allSlidersAtUnity = () => {
+    if (!sliders || sliders.length === 0) return true;
+    return sliders.every(slider => Math.abs(slider.value - 1.0) < 0.0001);
   };
 
   return (
@@ -1124,14 +1135,14 @@ Using fallback configuration`}
               />
             ) : comparisonMode === "slider" ? (
               <Spectrogram
-                signal={outputSignal}
+                signal={allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal}
                 title="Equalizer Spectrogram"
                 visible={showSpectrograms}
               />
             ) : (
               <>
                 <Spectrogram
-                  signal={outputSignal}
+                  signal={allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal}
                   title="Slider Output Spectrogram"
                   visible={showSpectrograms}
                 />

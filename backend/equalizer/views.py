@@ -12,6 +12,7 @@ from django.conf import settings
 from scipy.io import wavfile
 import json
 
+
 @api_view(['POST'])
 def separate_music_ai(request):
     """
@@ -75,7 +76,7 @@ def separate_music_ai(request):
                     '--out', output_dir,
                     input_wav_path
                 ]
-                
+
                 result = subprocess.run(
                     cmd,
                     capture_output=True,
@@ -97,24 +98,24 @@ def separate_music_ai(request):
                 # Read separated stems
                 stems_data = {}
                 available_stems = ['drums', 'bass', 'other', 'vocals', 'guitar', 'piano']
-                
+
                 for stem_name in available_stems:
                     stem_file = os.path.join(stems_path, f'{stem_name}.wav')
-                    
+
                     if os.path.exists(stem_file):
                         # Read WAV file
                         sr, stem_audio = wavfile.read(stem_file)
-                        
+
                         # Convert to float32 and normalize
                         if stem_audio.dtype == np.int16:
                             stem_audio = stem_audio.astype(np.float32) / 32768.0
                         elif stem_audio.dtype == np.int32:
                             stem_audio = stem_audio.astype(np.float32) / 2147483648.0
-                        
+
                         # Handle stereo to mono conversion
                         if len(stem_audio.shape) > 1:
                             stem_audio = np.mean(stem_audio, axis=1)
-                        
+
                         # Only include requested stems
                         if stem_name in requested_stems:
                             stems_data[stem_name] = {
@@ -215,6 +216,8 @@ def apply_stem_mixing(request):
             {'error': f'Stem mixing failed: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
 @api_view(['POST'])
 def compute_fft(request):
     """
@@ -369,6 +372,7 @@ def compute_spectrogram_view(request):
 def equalize_signal(request):
     """
     Apply equalization to input signal based on slider values
+    FIXED: Always return the SAME sample rate as input
     Expected payload:
     {
         "signal": [array of floats],
@@ -386,7 +390,8 @@ def equalize_signal(request):
     }
     Returns:
     {
-        "outputSignal": [array of floats]
+        "outputSignal": [array of floats],
+        "sampleRate": float  // ALWAYS SAME AS INPUT
     }
     """
     try:
@@ -429,8 +434,10 @@ def equalize_signal(request):
         # Apply equalization using the utility function
         output_signal = apply_equalization(signal, sample_rate, sliders)
 
+        # CRITICAL FIX: Return the SAME sample rate as input
         return Response({
-            'outputSignal': output_signal.tolist()
+            'outputSignal': output_signal.tolist(),
+            'sampleRate': sample_rate  # Use input sample rate, not modified
         }, status=status.HTTP_200_OK)
 
     except ValueError as e:

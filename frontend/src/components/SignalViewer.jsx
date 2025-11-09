@@ -48,8 +48,9 @@ function SignalViewer({
     const maxPanTime = Math.max(0, totalDuration - windowDuration);
     
     if (isPlaying && isCineMode) {
-      // During playback, signal scrolls from right to left
-      windowStartTime = currentTime;
+      // During playback, center the window on current time
+      // Keep playhead in center and scroll waveform
+      windowStartTime = currentTime - (windowDuration / 2);
       if (windowStartTime + windowDuration > totalDuration) {
         windowStartTime = totalDuration - windowDuration;
       }
@@ -100,29 +101,49 @@ function SignalViewer({
     }
     ctx.stroke();
 
-    // Draw fixed playhead only during playback
+    // Draw moving playhead during playback
     if (isPlaying && isCineMode) {
-      const playheadX = 10;
+      // Calculate playhead position based on current time within the visible window
+      const timeInWindow = currentTime - windowStartTime;
+      const playheadX = (timeInWindow / windowDuration) * width;
       
-      // Draw playhead line
-      ctx.strokeStyle = '#00ff88';
-      ctx.lineWidth = 3;
-      ctx.shadowColor = '#00ff88';
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      ctx.moveTo(playheadX, 0);
-      ctx.lineTo(playheadX, height);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      
-      // Draw labels
-      ctx.fillStyle = '#00ff88';
-      ctx.font = 'bold 14px Arial';
-      ctx.fillText('▶ NOW', playheadX + 5, 25);
-      
-      ctx.fillStyle = '#00d4ff';
-      ctx.font = '12px monospace';
-      ctx.fillText(`${currentTime.toFixed(2)}s`, playheadX + 5, 45);
+      // Only draw if playhead is within visible window
+      if (playheadX >= 0 && playheadX <= width) {
+        // Draw playhead line
+        ctx.strokeStyle = '#00ff88';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#00ff88';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.moveTo(playheadX, 0);
+        ctx.lineTo(playheadX, height);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        
+        // Draw labels above playhead
+        ctx.fillStyle = '#00ff88';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'left';
+        const labelX = playheadX + 5;
+        if (labelX + 60 < width) {
+          ctx.fillText('▶ NOW', labelX, 25);
+        } else {
+          // Draw on left side if too close to right edge
+          ctx.textAlign = 'right';
+          ctx.fillText('▶ NOW', playheadX - 5, 25);
+        }
+        
+        ctx.fillStyle = '#00d4ff';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'left';
+        if (labelX + 60 < width) {
+          ctx.fillText(`${currentTime.toFixed(2)}s`, labelX, 45);
+        } else {
+          ctx.textAlign = 'right';
+          ctx.fillText(`${currentTime.toFixed(2)}s`, playheadX - 5, 45);
+        }
+        ctx.textAlign = 'left'; // Reset alignment
+      }
     }
 
     // Draw time scale at bottom

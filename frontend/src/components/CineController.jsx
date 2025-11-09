@@ -13,7 +13,9 @@ function CineController({
   onZoomOut,
   onReset,
   currentTime,
-  duration
+  duration,
+  onToggleAudio,
+  isPlayingOriginal
 }) {
   return (
     <div className="cine-controller">
@@ -40,6 +42,15 @@ function CineController({
           >
             ⏹ Stop
           </button>
+          {onToggleAudio && (
+            <button 
+              className={`control-btn toggle ${!isPlayingOriginal ? 'active' : ''}`}
+              onClick={onToggleAudio}
+              title={isPlayingOriginal ? 'Switch to Equalized' : 'Switch to Original'}
+            >
+              {isPlayingOriginal ? '🔄 EQ' : '🔄 ORG'}
+            </button>
+          )}
         </div>
 
         {/* Time Display */}
@@ -47,6 +58,11 @@ function CineController({
           <span className="current-time">{currentTime.toFixed(2)}s</span>
           <span className="separator"> / </span>
           <span className="total-time">{duration ? duration.toFixed(2) : '0.00'}s</span>
+          {onToggleAudio && (
+            <span style={{ marginLeft: '10px', fontSize: '12px', opacity: 0.8 }}>
+              ({isPlayingOriginal ? 'Original' : 'Equalized'})
+            </span>
+          )}
         </div>
 
         {/* Speed Control - Extended range */}

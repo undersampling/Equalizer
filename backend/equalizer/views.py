@@ -102,10 +102,10 @@ def separate_music_ai(request):
             os.makedirs(output_dir, exist_ok=True)
 
             try:
-                # Run Demucs command
+                # Run Demucs command (using htdemucs which has 4 stems)
                 cmd = [
                     'demucs',
-                    '-n', 'htdemucs_6s',
+                    '-n', 'htdemucs',
                     '--out', output_dir,
                     input_wav_path
                 ]
@@ -121,7 +121,7 @@ def separate_music_ai(request):
                     raise Exception(f"Demucs failed: {result.stderr}")
 
                 # Load separated stems
-                model_name = "htdemucs_6s"
+                model_name = "htdemucs"
                 file_name = "input"
                 stems_path = os.path.join(output_dir, model_name, file_name)
 
@@ -130,7 +130,7 @@ def separate_music_ai(request):
 
                 # Read separated stems
                 stems_data = {}
-                available_stems = ['drums', 'bass', 'other', 'vocals', 'guitar', 'piano']
+                available_stems = ['drums', 'bass', 'other', 'vocals']
 
                 for stem_name in available_stems:
                     stem_file = os.path.join(stems_path, f'{stem_name}.wav')
@@ -249,8 +249,7 @@ def apply_stem_mixing(request):
             {'error': f'Stem mixing failed: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-
-
+    
 @api_view(['POST'])
 def compute_fft(request):
     """

@@ -12,8 +12,8 @@ urlpatterns = [
     path('fft', compute_fft, name='compute_fft'),
     path('spectrogram', compute_spectrogram_view, name='compute_spectrogram'),
     path('equalize', equalize_signal, name='equalize_signal'),
-    path('separate', separate_music_ai, name='separate_music'),
-    path('mix', apply_stem_mixing, name='mix_stems'),
+    path('separate-music', separate_music_ai, name='separate_music_ai'),
+    path('mix-stems', apply_stem_mixing, name='apply_stem_mixing'),
     path('separate-voices', separate_voices_ai, name='separate_voices'),
     path('mix-voices', mix_voices_with_gains, name='mix_voices'),
     # Mode configuration endpoints

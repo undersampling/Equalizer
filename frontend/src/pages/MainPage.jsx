@@ -1247,7 +1247,7 @@ import SliderCreationModal from "../components/SliderCreationModal";
 import Spectrogram from "../components/Spectrogram";
 import FourierGraph from "../components/FourierGraph";
 import AIModelSection from "../components/AIModelSection";
-import UnifiedMusicController from "../components/UnifiedMusicController";
+// import UnifiedMusicController from "../components/UnifiedMusicController";
 import LinkedSignalViewers from "../components/LinkedSignalViewers";
 import {
   getAllModeConfigs,
@@ -1894,7 +1894,7 @@ function MainPage() {
           />
         )}
 
-        {currentMode === "musical" && (
+        {/* {currentMode === "musical" && (
           <UnifiedMusicController
             inputSignal={inputSignal}
             sliders={sliders}
@@ -1902,7 +1902,7 @@ function MainPage() {
             onAIToggle={handleAIToggle}
             isAIEnabled={isAIMode}
           />
-        )}
+        )} */}
 
         <section className="section">
           <div
@@ -1917,23 +1917,6 @@ function MainPage() {
               {modeConfigs?.[currentMode]?.name || "Unknown Mode"}
             </h2>
 
-            {currentMode === "musical" && inputSignal && (
-              <button
-                className={`btn ${isAIMode ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => {
-                  const newMode = !isAIMode;
-                  setIsAIMode(newMode);
-                  handleAIToggle(newMode, aiStems);
-                }}
-                style={{
-                  background: isAIMode
-                    ? "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)"
-                    : undefined,
-                }}
-              >
-                {isAIMode ? "🤖 AI Mode (ON)" : "🎛️ Switch to AI Mode"}
-              </button>
-            )}
           </div>
 
           {modeConfigs?.[currentMode]?.description && (
@@ -1949,8 +1932,7 @@ function MainPage() {
                   }}
                 >
                   {isAIMode
-                    ? "🤖 Using AI stem separation - sliders control individual instruments"
-                    : "🎛️ Using frequency-based equalization"}
+                    }
                 </span>
               )}
             </p>

@@ -308,11 +308,11 @@ function LinkedSignalViewers({
   ]);
 
   const handleZoomIn = useCallback(() => {
-    setZoom((prev) => Math.min(prev * 1.5, 20));
+    setZoom((prev) => Math.min(prev * 1.2, 200));
   }, []);
 
   const handleZoomOut = useCallback(() => {
-    setZoom((prev) => Math.max(prev / 1.5, 1));
+    setZoom((prev) => Math.max(prev / 1.2, 1));
   }, []);
 
   const handleReset = useCallback(() => {

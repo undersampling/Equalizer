@@ -1,24 +1,16 @@
+import apiService from '../services/api';
+
 let cachedConfigs = null;
 let cacheTimestamp = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-const fetchModesFromBackend = async (apiBaseUrl) => {
+const fetchModesFromBackend = async () => {
   try {
-    console.log(`Fetching mode configs from ${apiBaseUrl}/api/modes/all`);
+    const baseUrl = apiService.getBaseURL();
+    console.log(`Fetching mode configs from ${baseUrl}/api/modes/all`);
 
-    const response = await fetch(`${apiBaseUrl}/api/modes/all`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
-    }
-
-    const data = await response.json();
+    const response = await apiService.getAllModes();
+    const data = response.data;
 
     if (!data.modes || typeof data.modes !== "object") {
       throw new Error("Invalid response format from backend");
@@ -51,7 +43,7 @@ export const getAllModeConfigs = async (apiBaseUrl, forceRefresh = false) => {
 
   // Fetch fresh data
   console.log("Fetching fresh mode configs from backend");
-  cachedConfigs = await fetchModesFromBackend(apiBaseUrl);
+  cachedConfigs = await fetchModesFromBackend();
   cacheTimestamp = now;
 
   // Return deep copy
@@ -95,20 +87,8 @@ export const getAllModes = async (apiBaseUrl) => {
  */
 export const updateModeConfig = async (mode, config, apiBaseUrl) => {
   try {
-    const response = await fetch(`${apiBaseUrl}/api/modes/update`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ mode, config }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "Failed to update mode config");
-    }
-
-    const result = await response.json();
+    const response = await apiService.updateModeConfig(mode, config);
+    const result = response.data;
 
     // Clear cache to force refresh on next fetch
     clearCache();
@@ -127,20 +107,8 @@ export const updateModeConfig = async (mode, config, apiBaseUrl) => {
  */
 export const updateSliderValues = async (mode, sliders, apiBaseUrl) => {
   try {
-    const response = await fetch(`${apiBaseUrl}/api/modes/update-sliders`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ mode, sliders }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "Failed to update sliders");
-    }
-
-    const result = await response.json();
+    const response = await apiService.updateSliderValues(mode, sliders);
+    const result = response.data;
 
     // Update cache with new values
     if (cachedConfigs && cachedConfigs[mode]) {

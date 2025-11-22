@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import apiService from "../services/api";
 import "../styles/UnifiedMusicController.css";
 
 function UnifiedMusicController({
@@ -13,7 +14,7 @@ function UnifiedMusicController({
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState("");
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 
   // Automatically trigger AI separation when toggled ON
   useEffect(() => {
@@ -33,22 +34,11 @@ function UnifiedMusicController({
     setProgress("🎧 Separating instruments with AI (1-3 minutes)...");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/separate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          signal: inputSignal.data,
-          sampleRate: inputSignal.sampleRate,
-          stems: ["drums", "bass", "vocals", "piano", "guitar", "other"],
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error ${response.status}`);
-      }
-
-      const result = await response.json();
+      const response = await apiService.separate(
+        inputSignal.data,
+        inputSignal.sampleRate
+      );
+      const result = response.data;
       setSeparatedStems(result.stems);
       setProgress("✅ AI separation complete!");
 

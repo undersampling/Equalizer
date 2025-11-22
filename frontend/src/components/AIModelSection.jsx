@@ -331,6 +331,7 @@
 
 // export default AIModelSection;
 import React, { useState, useRef } from "react";
+import apiService from "../services/api";
 import "../styles/AIModelSection.css";
 
 function AIModelSection({ mode, inputSignal, outputSignal, onModelResult, onComparisonChange }) {
@@ -353,7 +354,7 @@ function AIModelSection({ mode, inputSignal, outputSignal, onModelResult, onComp
   const audioSourceRefs = useRef({});
   const previousComparisonModeRef = useRef(null);
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 
   const processWithAI = async () => {
     if (!inputSignal) {
@@ -366,22 +367,11 @@ function AIModelSection({ mode, inputSignal, outputSignal, onModelResult, onComp
     try {
       if (mode === "musical") {
         // Music stem separation using Demucs
-        const response = await fetch(`${API_BASE_URL}/api/separate-music`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            signal: inputSignal.data,
-            sampleRate: inputSignal.sampleRate,
-            stems: ['drums', 'bass', 'other', 'vocals']
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `HTTP error ${response.status}`);
-        }
-
-        const result = await response.json();
+        const response = await apiService.separateMusic(
+          inputSignal.data,
+          inputSignal.sampleRate
+        );
+        const result = response.data;
         setSeparatedStems(result.stems);
         
         // Initialize gains to 1.0 for all stems
@@ -396,21 +386,11 @@ function AIModelSection({ mode, inputSignal, outputSignal, onModelResult, onComp
         
       } else if (mode === "human") {
         // Human voice separation (keep existing code)
-        const response = await fetch(`${API_BASE_URL}/api/separate-voices`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            signal: inputSignal.data,
-            sampleRate: inputSignal.sampleRate,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `HTTP error ${response.status}`);
-        }
-
-        const result = await response.json();
+        const response = await apiService.separateVoices(
+          inputSignal.data,
+          inputSignal.sampleRate
+        );
+        const result = response.data;
         setSeparatedVoices(result.voices);
         
         const initialGains = {};
@@ -442,21 +422,11 @@ function AIModelSection({ mode, inputSignal, outputSignal, onModelResult, onComp
         };
       });
 
-      const response = await fetch(`${API_BASE_URL}/api/mix-stems`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          stems: stemsWithGains,
-          sampleRate: inputSignal.sampleRate,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error ${response.status}`);
-      }
-
-      const result = await response.json();
+      const response = await apiService.mixStems(
+        stemsWithGains,
+        inputSignal.sampleRate
+      );
+      const result = response.data;
 
       const aiSignal = {
         data: result.mixedSignal,
@@ -502,21 +472,11 @@ function AIModelSection({ mode, inputSignal, outputSignal, onModelResult, onComp
         };
       });
 
-      const response = await fetch(`${API_BASE_URL}/api/mix-voices`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          voices: voicesWithGains,
-          sampleRate: inputSignal.sampleRate,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error ${response.status}`);
-      }
-
-      const result = await response.json();
+      const response = await apiService.mixVoices(
+        voicesWithGains,
+        inputSignal.sampleRate
+      );
+      const result = response.data;
 
       const aiSignal = {
         data: result.mixedSignal,

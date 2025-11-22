@@ -1,76 +1,62 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import '../styles/Spectrogram.css';
-import { limitSignalSize } from '../utils/audioUtils';
-
+import apiService from '../services/api';
 function Spectrogram({ signal, title, visible }) {
   const canvasRef = useRef(null);
   const [spectrogramData, setSpectrogramData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // API base URL - matches MainPage
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 
   useEffect(() => {
-    if (!signal || !canvasRef.current || !visible) {
-      setSpectrogramData(null);
-      return;
-    }
+  if (!signal || !canvasRef.current || !visible) {
+    setSpectrogramData(null);
+    return;
+  }
 
-    setIsLoading(true);
-    setError(null);
+  setIsLoading(true);
+  setError(null);
 
+  const fetchSpectrogram = async () => {
     try {
-      // Limit signal size before sending
-      const limitedSignal = limitSignalSize(signal.data, 100000);
-
-      if (limitedSignal.length === 0) {
-        setError('Signal is too large or empty');
+      if (!signal.data || signal.data.length === 0) {
+        setError('Signal is empty');
         setIsLoading(false);
         return;
       }
 
-      const requestBody = {
-        signal: limitedSignal,
-        sampleRate: signal.sampleRate,
-        use_mel: true,
-        n_mels: 128,
-        fmax: 8000,
-      };
-
-      // Check request size
-      const requestSize = JSON.stringify(requestBody).length;
-      if (requestSize > 50 * 1024 * 1024) { // 50MB limit
-        throw new Error('Signal is too large to process. Please use a shorter audio file.');
+      // Check for invalid values
+      const hasNaN = signal.data.some(v => isNaN(v) || !isFinite(v));
+      if (hasNaN) {
+        console.warn('Signal contains NaN/Inf - backend will clean');
       }
 
-      // Fetch spectrogram data from backend
-      fetch(`${API_BASE_URL}/api/spectrogram`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      })
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
-      })
-      .then((data) => {
-        setSpectrogramData(data);
-        setIsLoading(false);
-      })
-      .catch((err) => {
-        console.error('Error computing spectrogram:', err);
-        setError(err.message);
-        setIsLoading(false);
-      });
+      console.log(`📊 Requesting spectrogram: ${signal.data.length} samples at ${signal.sampleRate}Hz`);
+
+      const response = await apiService.generateSpectrogram(
+        signal.data,
+        signal.sampleRate,
+        true,
+        128,
+        8000
+      );
+      
+      console.log('✅ Spectrogram received');
+      setSpectrogramData(response.data);
+      setIsLoading(false);
     } catch (err) {
-      console.error('Error preparing spectrogram request:', err);
-      setError(err.message || 'Failed to prepare request');
+      console.error('❌ Error computing spectrogram:', err);
+      const errorMsg = err.response?.data?.error || err.message;
+      console.error('Full error:', errorMsg);
+      setError(errorMsg);
       setIsLoading(false);
     }
-  }, [signal, visible]);
+  };
+
+  fetchSpectrogram();
+}, [signal, visible]);
 
   useEffect(() => {
     if (!spectrogramData || !canvasRef.current) return;
@@ -100,8 +86,17 @@ function Spectrogram({ signal, title, visible }) {
     const freqLen = freqs.length;
 
     // Draw spectrogram
-    const maxDb = Math.max(...spectrogram.flat());
-    const minDb = Math.min(...spectrogram.flat());
+    // Use reduce to find min/max safely to avoid stack overflow
+    let maxDb = -Infinity;
+    let minDb = Infinity;
+    
+    for (let i = 0; i < spectrogram.length; i++) {
+      for (let j = 0; j < spectrogram[i].length; j++) {
+        const val = spectrogram[i][j];
+        if (val > maxDb) maxDb = val;
+        if (val < minDb) minDb = val;
+      }
+    }
 
     for (let i = 0; i < freqLen; i++) {
       for (let j = 0; j < timeLen; j++) {

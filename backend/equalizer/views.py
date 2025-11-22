@@ -253,22 +253,13 @@ def apply_stem_mixing(request):
 @api_view(['POST'])
 def compute_fft(request):
     """
-    Compute FFT of input signal
-    Expected payload:
-    {
-        "signal": [array of floats],
-        "sampleRate": float
-    }
-    Returns:
-    {
-        "frequencies": [array of floats],
-        "magnitudes": [array of floats],
-        "phases": [array of floats] (optional)
-    }
+    Compute FFT with comprehensive error handling
     """
     try:
         signal_data = request.data.get('signal', [])
         sample_rate = float(request.data.get('sampleRate', 44100))
+
+        print(f"📊 FFT Request: signal length={len(signal_data)}, sr={sample_rate}")
 
         if not signal_data:
             return Response(
@@ -293,49 +284,131 @@ def compute_fft(request):
 
         # Handle NaN or Inf values
         if np.any(np.isnan(signal)) or np.any(np.isinf(signal)):
+            print("⚠️ Cleaning NaN/Inf from signal")
             signal = np.nan_to_num(signal, nan=0.0, posinf=0.0, neginf=0.0)
 
         # Compute FFT
         magnitude, phase, fft_result = fft_magnitude_phase(signal)
 
-        # Calculate frequencies using custom fftfreq function
+        # Calculate frequencies
         N = len(magnitude)
         d = 1.0 / sample_rate
         frequencies = fftfreq_custom(N, d)
 
-        # Only return positive frequencies (first half)
+        # Only positive frequencies
         positive_freq_idx = frequencies >= 0
         frequencies = frequencies[positive_freq_idx]
         magnitude = magnitude[positive_freq_idx]
         phase = phase[positive_freq_idx]
 
-        # Handle empty results
         if len(frequencies) == 0 or len(magnitude) == 0:
             return Response(
                 {'error': 'FFT computation resulted in empty data'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        # Prepare response in the exact format FourierGraph expects
+        # Downsample for transmission
+        MAX_DISPLAY_POINTS = 5000
+        if len(frequencies) > MAX_DISPLAY_POINTS:
+            block_size = len(frequencies) // MAX_DISPLAY_POINTS
+            n_keep = MAX_DISPLAY_POINTS * block_size
+            
+            freq_reshaped = frequencies[:n_keep].reshape(MAX_DISPLAY_POINTS, block_size)
+            mag_reshaped = magnitude[:n_keep].reshape(MAX_DISPLAY_POINTS, block_size)
+            phase_reshaped = phase[:n_keep].reshape(MAX_DISPLAY_POINTS, block_size)
+            
+            max_indices = np.argmax(mag_reshaped, axis=1)
+            row_indices = np.arange(MAX_DISPLAY_POINTS)
+            
+            magnitude = mag_reshaped[row_indices, max_indices]
+            frequencies = freq_reshaped[row_indices, max_indices]
+            phase = phase_reshaped[row_indices, max_indices]
+
+        print(f"✅ FFT Success: {len(frequencies)} points returned")
+
         response_data = {
             'frequencies': frequencies.tolist(),
             'magnitudes': magnitude.tolist(),
-            'phases': phase.tolist(),  # Optional, for future use
+            'phases': phase.tolist(),
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
 
     except ValueError as e:
+        print(f"❌ FFT ValueError: {e}")
+        import traceback
+        traceback.print_exc()
         return Response(
             {'error': f'Invalid input: {str(e)}'},
             status=status.HTTP_400_BAD_REQUEST
         )
     except Exception as e:
+        print(f"❌ FFT Exception: {e}")
+        import traceback
+        traceback.print_exc()
         return Response(
             {'error': f'FFT computation failed: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+
+@api_view(['POST'])
+def compute_spectrogram_view(request):
+    """
+    Compute spectrogram with comprehensive error handling
+    """
+    try:
+        signal_data = request.data.get('signal', [])
+        sample_rate = float(request.data.get('sampleRate', 44100))
+        n_fft = request.data.get('n_fft', 2048)
+        hop_length = request.data.get('hop_length', 512)
+        n_mels = request.data.get('n_mels', 128)
+        fmax = request.data.get('fmax', 8000)
+        use_mel = request.data.get('use_mel', True)
+        max_time_points = request.data.get('max_time_points', 800)
+        max_freq_points = request.data.get('max_freq_points', 600)
+
+        print(f"📊 Spectrogram Request: signal length={len(signal_data)}, sr={sample_rate}, use_mel={use_mel}")
+
+        if not signal_data:
+            return Response(
+                {'error': 'Signal data is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Convert to numpy array
+        signal = np.array(signal_data, dtype=float)
+
+        # Handle NaN or Inf values
+        if np.any(np.isnan(signal)) or np.any(np.isinf(signal)):
+            print("⚠️ Cleaning NaN/Inf from signal")
+            signal = np.nan_to_num(signal, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # Compute spectrogram
+        spectrogram_data = compute_spectrogram(
+            signal,
+            sample_rate,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            n_mels=n_mels,
+            fmax=fmax,
+            use_mel=use_mel,
+            max_time_points=max_time_points,
+            max_freq_points=max_freq_points
+        )
+
+        print(f"✅ Spectrogram Success")
+
+        return Response(spectrogram_data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        print(f"❌ Spectrogram Exception: {e}")
+        import traceback
+        traceback.print_exc()
+        return Response(
+            {'error': f'Spectrogram computation failed: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 @api_view(['POST'])
 def compute_spectrogram_view(request):
@@ -362,8 +435,11 @@ def compute_spectrogram_view(request):
         n_mels = request.data.get('n_mels', 128)
         fmax = request.data.get('fmax', 8000)
         use_mel = request.data.get('use_mel', True)
-        max_time_points = request.data.get('max_time_points', None)
-        max_freq_points = request.data.get('max_freq_points', None)
+        
+        # Default to reasonable display limits if not provided
+        # 800x600 is a good target for spectrogram heatmap
+        max_time_points = request.data.get('max_time_points', 800)
+        max_freq_points = request.data.get('max_freq_points', 600)
 
         if not signal_data:
             return Response(
@@ -403,49 +479,27 @@ def compute_spectrogram_view(request):
 @api_view(['POST'])
 def equalize_signal(request):
     """
-    Apply equalization to input signal based on slider values
-    FIXED: Always return the SAME sample rate as input
-    Expected payload:
-    {
-        "signal": [array of floats],
-        "sampleRate": float,
-        "sliders": [
-            {
-                "id": int,
-                "label": string,
-                "value": float,  // Gain factor (1.0 = unity, <1.0 = lower, >1.0 = raise)
-                "freqRanges": [[min_freq, max_freq], ...]  // Frequency intervals to equalize
-            },
-            ...
-        ],
-        "mode": string (optional)
-    }
-    Returns:
-    {
-        "outputSignal": [array of floats],
-        "sampleRate": float  // ALWAYS SAME AS INPUT
-    }
+    Apply equalization with detailed logging
     """
     try:
         signal_data = request.data.get('signal', [])
         sample_rate = float(request.data.get('sampleRate', 44100))
         sliders = request.data.get('sliders', [])
 
+        print(f"\n{'='*60}")
+        print(f"📥 EQUALIZATION REQUEST")
+        print(f"{'='*60}")
+        print(f"Signal length: {len(signal_data)} samples")
+        print(f"Sample rate: {sample_rate} Hz")
+        print(f"Number of sliders: {len(sliders)}")
+        
+        for i, slider in enumerate(sliders):
+            print(f"  Slider {i}: {slider.get('label')} = {slider.get('value')}")
+            print(f"    Ranges: {slider.get('freqRanges')}")
+
         if not signal_data:
             return Response(
                 {'error': 'Signal data is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if not isinstance(signal_data, list):
-            return Response(
-                {'error': 'Signal must be an array'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if len(signal_data) == 0:
-            return Response(
-                {'error': 'Signal array cannot be empty'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -463,26 +517,32 @@ def equalize_signal(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Apply equalization using the utility function
+        # Apply equalization
         output_signal = apply_equalization(signal, sample_rate, sliders)
 
-        # CRITICAL FIX: Return the SAME sample rate as input
+        print(f"✅ Equalization successful!")
+        print(f"{'='*60}\n")
+
+        # Return with SAME sample rate
         return Response({
             'outputSignal': output_signal.tolist(),
-            'sampleRate': sample_rate  # Use input sample rate, not modified
+            'sampleRate': sample_rate
         }, status=status.HTTP_200_OK)
 
     except ValueError as e:
+        print(f"❌ ValueError: {e}")
         return Response(
             {'error': f'Invalid input: {str(e)}'},
             status=status.HTTP_400_BAD_REQUEST
         )
     except Exception as e:
+        print(f"❌ Exception: {e}")
+        import traceback
+        traceback.print_exc()
         return Response(
             {'error': f'Equalization failed: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-
 
 @api_view(['POST'])
 def separate_voices_ai(request):

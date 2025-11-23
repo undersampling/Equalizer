@@ -154,8 +154,10 @@
   border-radius: 10px;
   background: linear-gradient(to top, #10b981, #3b82f6, #1e293b);
   outline: none;
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
+  -webkit-appearance: none;
+  appearance: none;
+  writing-mode: vertical-lr;
+  direction: rtl;
   cursor: pointer;
   flex-shrink: 0;
 }

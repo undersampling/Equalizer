@@ -123,8 +123,38 @@ function FourierGraph({ fourierData, scale = 'linear', title = 'Fourier Transfor
       return;
     }
 
+    // Visual Decimation: Reduce points for rendering while preserving peaks
+    const maxDisplayPoints = 2000;
+    if (processedData.length > maxDisplayPoints) {
+      const blockSize = processedData.length / maxDisplayPoints;
+      const decimated = [];
+      
+      for (let i = 0; i < maxDisplayPoints; i++) {
+        const start = Math.floor(i * blockSize);
+        const end = Math.floor((i + 1) * blockSize);
+        
+        let maxVal = -Infinity;
+        let maxPoint = null;
+        
+        for (let j = start; j < end && j < processedData.length; j++) {
+          if (processedData[j].y > maxVal) {
+            maxVal = processedData[j].y;
+            maxPoint = processedData[j];
+          }
+        }
+        
+        if (maxPoint) {
+          decimated.push(maxPoint);
+        }
+      }
+      processedData = decimated;
+    }
+
     // Calculate max magnitude for scaling
-    let maxMagnitude = Math.max(...processedData.map(d => d.y));
+    let maxMagnitude = 0;
+    if (processedData.length > 0) {
+      maxMagnitude = processedData.reduce((max, p) => (p.y > max ? p.y : max), 0);
+    }
     if (maxMagnitude === 0) maxMagnitude = 1;
 
     // Draw FFT line

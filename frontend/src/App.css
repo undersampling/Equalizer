@@ -64,6 +64,12 @@ body {
   border-color: #7dd3fc;
 }
 
+/* Add this to fix the white background in the dropdown list */
+.mode-selector option {
+  background-color: #1a1f3a; /* Uses your header's dark blue color */
+  color: #e0e0e0;            /* Ensures text remains visible */
+}
+
 .header-buttons {
   display: flex;
   gap: 12px;

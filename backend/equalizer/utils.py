@@ -3,6 +3,38 @@ import cmath
 from numba import jit, prange, complex128, float64, int32
 from multiprocessing import Pool, cpu_count
 
+# FFT cache for performance optimization
+_fft_cache = {}
+
+def clear_fft_cache():
+    """Clear the FFT cache. Useful for memory management or when signal changes."""
+    global _fft_cache
+    _fft_cache.clear()
+    print("🗑️ FFT cache cleared")
+
+def get_signal_hash(signal, sample_rate):
+    """
+    Generate a hash for the signal to detect changes.
+    Uses signal length, sample rate, and a sample of data points.
+    """
+    # Convert to numpy array if needed
+    if not isinstance(signal, np.ndarray):
+        signal = np.array(signal, dtype=float)
+    
+    # Use a combination of length, sample rate, and sample points for hash
+    signal_len = len(signal)
+    sample_size = min(100, signal_len)  # Sample first 100 points for hash
+    
+    if signal_len == 0:
+        return hash((0, sample_rate))
+    
+    # Get sample points and convert to tuple for hashing
+    sample_points = tuple(signal[:sample_size].tolist())
+    first_val = float(signal[0])
+    last_val = float(signal[-1])
+    
+    return hash((signal_len, sample_rate, sample_points, first_val, last_val))
+
 
 @jit(complex128[:](complex128[:]), nopython=True, cache=True)
 def fft_custom_iterative(x):
@@ -398,8 +430,11 @@ def apply_equalization(signal, sample_rate, sliders):
 
         original_length = len(signal)
         
+        # Generate signal hash for caching
+        signal_hash = get_signal_hash(signal, sample_rate)
+        
         print(f"\n🎚️ Starting equalization: {original_length} samples @ {sample_rate}Hz")
-        result = apply_equalization_direct(signal, sample_rate, sliders, original_length)
+        result = apply_equalization_direct(signal, sample_rate, sliders, original_length, signal_hash)
         print(f"✅ Equalization complete\n")
         
         return result
@@ -411,18 +446,32 @@ def apply_equalization(signal, sample_rate, sliders):
         raise
 
 
-def apply_equalization_direct(signal, sample_rate, sliders, original_length):
+def apply_equalization_direct(signal, sample_rate, sliders, original_length, signal_hash=None):
     """
     Direct FFT processing with PROPER frequency removal/boosting
     SUPPORTS ALL GAIN VALUES: 0.0 (mute) to 2.0 (2x boost)
+    Uses FFT caching for performance optimization.
     """
     print(f"🎛️ Applying equalization: {len(sliders)} sliders, signal length: {original_length}")
     
-    # Apply FFT
-    fft_result = fft_custom(signal)
+    # Check FFT cache
+    cache_key = signal_hash if signal_hash is not None else get_signal_hash(signal, sample_rate)
+    
+    if cache_key in _fft_cache:
+        fft_result, frequencies = _fft_cache[cache_key]
+        print(f"✅ Using cached FFT (cache hit)")
+    else:
+        # Compute FFT and cache it
+        print(f"💾 Computing FFT (cache miss)")
+        fft_result = fft_custom(signal)
+        N = len(fft_result)
+        d = 1.0 / sample_rate
+        frequencies = fftfreq_custom(N, d)
+        # Cache the FFT result and frequencies
+        _fft_cache[cache_key] = (fft_result, frequencies)
+        print(f"💾 FFT cached for future use")
+    
     N = len(fft_result)
-    d = 1.0 / sample_rate
-    frequencies = fftfreq_custom(N, d)
     
     # ✅ Start with unity gain everywhere (1.0 = no change)
     gain_mask = np.ones(N, dtype=np.float64)  # Use float64 for better precision

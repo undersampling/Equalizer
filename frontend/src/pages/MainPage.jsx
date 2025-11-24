@@ -939,6 +939,7 @@ function MainPage() {
   const backendSyncTimeoutRef = useRef(null);
   const isProcessingRef = useRef(false);
   const slidersRef = useRef(sliders);
+  const requestCounterRef = useRef(0);
 
   const isAIModeEnabled = currentMode === "musical" || currentMode === "human";
 
@@ -1255,25 +1256,60 @@ function MainPage() {
     }
   };
 
-  const handleSliderChange = (sliderId, newValue) => {
+  const handleSliderChange = (sliderId, newValue, shouldEqualize = false) => {
+    // Always update visual state immediately for smooth dragging
     setSliders((prev) =>
       prev.map((slider) =>
         slider.id === sliderId ? { ...slider, value: newValue } : slider
       )
     );
 
-    if (inputSignal && apiSignal) {
+    // Only trigger equalization if explicitly requested (on mouse release)
+    if (shouldEqualize && inputSignal && apiSignal) {
       if (equalizationTimeoutRef.current)
         clearTimeout(equalizationTimeoutRef.current);
+      
+      // Increment counter to invalidate previous requests
+      requestCounterRef.current += 1;
+      const currentRequest = requestCounterRef.current;
+      
+      // Small delay to ensure state is updated
       equalizationTimeoutRef.current = setTimeout(() => {
         if (isAIMode && aiStems) applyAIMixing();
-        else applyEqualization();
-      }, 150);
+        else applyEqualization(currentRequest);
+      }, 50);
     }
   };
 
-  const applyEqualization = useCallback(async () => {
+  // Handler for mouse up - triggers equalization
+  const handleSliderMouseUp = (sliderId, newValue) => {
+    // Trigger equalization on mouse release
+    if (inputSignal && apiSignal) {
+      if (equalizationTimeoutRef.current)
+        clearTimeout(equalizationTimeoutRef.current);
+      
+      requestCounterRef.current += 1;
+      const currentRequest = requestCounterRef.current;
+      
+      // Small delay to ensure all state is updated
+      equalizationTimeoutRef.current = setTimeout(() => {
+        if (isAIMode && aiStems) applyAIMixing();
+        else applyEqualization(currentRequest);
+      }, 50);
+    }
+  };
+
+  const applyEqualization = useCallback(async (expectedRequestId) => {
     if (!inputSignal || !apiSignal || isProcessingRef.current) return;
+    
+    // If no request ID provided, use current counter (for non-slider triggers)
+    const requestId = expectedRequestId ?? requestCounterRef.current;
+    
+    // Check if this request is still valid
+    if (requestId !== requestCounterRef.current) {
+      return; // This request is stale, ignore it
+    }
+    
     isProcessingRef.current = true;
 
     try {
@@ -1283,6 +1319,12 @@ function MainPage() {
         slidersRef.current,
         currentMode
       );
+      
+      // Double-check request is still valid after async operation
+      if (requestId !== requestCounterRef.current) {
+        return; // Stale request, ignore result
+      }
+      
       const result = response.data;
 
       if (!result.outputSignal || !Array.isArray(result.outputSignal)) {
@@ -1300,11 +1342,16 @@ function MainPage() {
       if (fftTimeoutRef.current) clearTimeout(fftTimeoutRef.current);
       fftTimeoutRef.current = setTimeout(() => {
         computeFourierTransform(newOutputApiSignal, "output");
-      }, 200);
+      }, 100);
     } catch (error) {
-      showToast("❌ Equalization failed", "error");
+      // Only show error if this is still the current request
+      if (requestId === requestCounterRef.current) {
+        showToast("❌ Equalization failed", "error");
+      }
     } finally {
-      isProcessingRef.current = false;
+      if (requestId === requestCounterRef.current) {
+        isProcessingRef.current = false;
+      }
     }
   }, [inputSignal, apiSignal, currentMode]);
 
@@ -1516,6 +1563,7 @@ function MainPage() {
                 key={slider.id}
                 slider={slider}
                 onChange={handleSliderChange}
+                onMouseUp={handleSliderMouseUp}
                 onRemove={canAddCustomSliders() ? handleRemoveSlider : null}
               />
             ))}

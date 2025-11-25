@@ -1,139 +1,5 @@
-/* AI Model Section - Simplified */
-.ai-model-section {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  padding: 25px;
-  border-radius: 12px;
-  margin-bottom: 20px;
-}
-
-.ai-controls {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.ai-status {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 15px;
-  background: rgba(139, 92, 246, 0.1);
-  border-radius: 8px;
-}
-
-.status-indicator.loaded {
-  color: #10b981;
-  font-size: 18px;
-}
-
-.status-text {
-  color: #e0e0e0;
-  font-size: 14px;
-}
-
-.ai-process-btn {
-  padding: 12px 24px;
-  font-size: 15px;
-  font-weight: 600;
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-  border: none;
-  border-radius: 8px;
-  color: white;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.ai-process-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
-}
-
-.ai-process-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.comparison-section {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(139, 92, 246, 0.3);
-}
-
-.comparison-title {
-  color: #a78bfa;
-  font-size: 18px;
-  text-align: center;
-  margin-bottom: 15px;
-}
-
-.comparison-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
-  margin-bottom: 15px;
-}
-
-.comparison-btn {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 15px;
-  background: rgba(139, 92, 246, 0.1);
-  border: 2px solid rgba(139, 92, 246, 0.3);
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.comparison-btn:hover {
-  background: rgba(139, 92, 246, 0.2);
-  transform: translateY(-2px);
-}
-
-.comparison-btn.active {
-  background: rgba(139, 92, 246, 0.3);
-  border-color: #8b5cf6;
-  box-shadow: 0 0 15px rgba(139, 92, 246, 0.4);
-}
-
-.comparison-icon {
-  font-size: 28px;
-}
-
-.comparison-btn-content {
-  flex: 1;
-  text-align: left;
-}
-
-.comparison-btn-title {
-  color: #e0e0e0;
-  font-weight: 600;
-  font-size: 14px;
-  margin-bottom: 3px;
-}
-
-.comparison-btn-subtitle {
-  color: #94a3b8;
-  font-size: 12px;
-}
-
-.comparison-info {
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 8px;
-  padding: 12px;
-  text-align: center;
-}
-
-.info-badge {
-  color: #7dd3fc;
-  font-size: 14px;
-}
-
-.voice-separation-controls {
+/* Compact Stems/Voices Section */
+.compact-stems-section {
   margin-top: 20px;
   padding: 15px;
   background: rgba(139, 92, 246, 0.05);
@@ -141,123 +7,89 @@
   border: 1px solid rgba(139, 92, 246, 0.2);
 }
 
-.voice-separation-title {
+.compact-section-title {
   color: #a78bfa;
-  font-size: 16px;
-  margin-bottom: 15px;
-  text-align: center;
-}
-
-.voice-sliders-container {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.voice-slider-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.voice-slider-label {
-  color: #e0e0e0;
-  font-size: 13px;
-  min-width: 60px;
-  font-weight: 500;
-}
-
-.voice-slider-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-}
-
-.voice-play-btn {
-  padding: 6px 12px;
-  background: rgba(139, 92, 246, 0.2);
-  border: 1px solid rgba(139, 92, 246, 0.4);
-  border-radius: 6px;
-  color: #a78bfa;
-  cursor: pointer;
   font-size: 14px;
-  transition: all 0.2s;
-  min-width: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.voice-play-btn:hover {
-  background: rgba(139, 92, 246, 0.3);
-  border-color: #8b5cf6;
-  transform: scale(1.05);
-}
-
-.voice-play-btn:active {
-  transform: scale(0.95);
-}
-
-.voice-slider {
-  flex: 1;
-  height: 6px;
-  background: rgba(139, 92, 246, 0.3);
-  border-radius: 3px;
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.voice-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-  border-radius: 50%;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.4);
-}
-
-.voice-slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
-  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.4);
-}
-
-.voice-slider-value {
-  color: #a78bfa;
-  font-size: 12px;
-  min-width: 40px;
-  text-align: right;
+  margin: 0 0 12px 0;
+  text-align: center;
   font-weight: 600;
 }
 
-.comparison-buttons {
+.compact-stems-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 15px;
-  margin-bottom: 15px;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 10px;
+  max-width: 500px;
+  margin: 0 auto;
 }
 
-/* Responsive */
-@media (max-width: 1024px) {
-  .comparison-buttons {
-    grid-template-columns: 1fr;
+.compact-stem-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 8px;
+  background: rgba(139, 92, 246, 0.1);
+  border: 2px solid rgba(139, 92, 246, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 70px;
+  position: relative;
+}
+
+.compact-stem-btn:hover {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: #8b5cf6;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+}
+
+.compact-stem-btn.playing {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  animation: compact-pulse 2s infinite;
+}
+
+.compact-stem-icon {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.compact-stem-label {
+  color: #e0e0e0;
+  font-size: 10px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.compact-stem-state {
+  font-size: 12px;
+  color: #a78bfa;
+}
+
+@keyframes compact-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
   }
 }
 
+/* Responsive design for compact stems */
 @media (max-width: 768px) {
-  .ai-controls {
-    flex-direction: column;
+  .compact-stems-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
   }
-
-  .comparison-buttons {
-    grid-template-columns: 1fr;
+  
+  .compact-stem-btn {
+    padding: 10px 6px;
+    min-height: 60px;
+  }
+  
+  .compact-stem-icon {
+    font-size: 18px;
   }
 }

@@ -28,48 +28,60 @@ if not hasattr(torchaudio, 'list_audio_backends'):
 _voice_separation_model = None
 
 def get_voice_separation_model():
-    """Lazy load the voice separation model"""
+    """Lazy load the voice separation model with Windows symlink fix"""
     global _voice_separation_model
     if _voice_separation_model is None:
-        print("Loading voice separation model...")
+        print("🔄 Loading SpeechBrain model without symlinks...")
         try:
+            # Force LocalStrategy to avoid symlinks on Windows
             _voice_separation_model = SepformerSeparation.from_hparams(
                 source="speechbrain/sepformer-wsj03mix",
                 savedir='pretrained_models/sepformer-wsj03mix',
                 run_opts={"device": "cuda" if torch.cuda.is_available() else "cpu"},
-                use_auth_token=False
+                use_auth_token=False,
+                local_strategy="copy"  # CRITICAL: Use copy instead of symlink
             )
-            print("Voice separation model loaded successfully!")
+            print("✅ Voice separation model loaded successfully!")
         except Exception as e:
-            print(f"Error loading voice separation model: {e}")
-            raise
+            print(f"❌ Error loading voice separation model: {e}")
+            # Fallback: try without savedir (downloads to default cache)
+            try:
+                print("🔄 Trying fallback without custom savedir...")
+                _voice_separation_model = SepformerSeparation.from_hparams(
+                    source="speechbrain/sepformer-wsj03mix",
+                    run_opts={"device": "cuda" if torch.cuda.is_available() else "cpu"},
+                    use_auth_token=False,
+                )
+                print("✅ Voice separation model loaded with fallback!")
+            except Exception as e2:
+                print(f"❌ Fallback also failed: {e2}")
+                raise
     return _voice_separation_model
-
 
 @api_view(['POST'])
 def separate_music_ai(request):
     """
-    Separate music using Demucs AI model
+    Separate music using Demucs 6-stem AI model
     Expected payload:
     {
         "signal": [array of floats],
-        "sampleRate": float,
-        "stems": ["drums", "bass", "other", "vocals"]  // optional, default all
+        "sampleRate": float
     }
     Returns:
     {
         "stems": {
             "drums": {"data": [...], "sampleRate": float},
             "bass": {"data": [...], "sampleRate": float},
-            "other": {"data": [...], "sampleRate": float},
-            "vocals": {"data": [...], "sampleRate": float}
+            "vocals": {"data": [...], "sampleRate": float},
+            "guitar": {"data": [...], "sampleRate": float},
+            "piano": {"data": [...], "sampleRate": float},
+            "other": {"data": [...], "sampleRate": float}
         }
     }
     """
     try:
         signal_data = request.data.get('signal', [])
         sample_rate = int(request.data.get('sampleRate', 44100))
-        requested_stems = request.data.get('stems', ['drums', 'bass', 'other', 'vocals'])
 
         if not signal_data:
             return Response(
@@ -97,15 +109,15 @@ def separate_music_ai(request):
             input_wav_path = os.path.join(temp_dir, 'input.wav')
             wavfile.write(input_wav_path, sample_rate, signal_int16)
 
-            # Run Demucs separation
+            # Run Demucs separation with 6-stem model
             output_dir = os.path.join(temp_dir, 'separated')
             os.makedirs(output_dir, exist_ok=True)
 
             try:
-                # Run Demucs command (using htdemucs which has 4 stems)
+                # Use htdemucs_6s for 6 stems: drums, bass, vocals, guitar, piano, other
                 cmd = [
                     'demucs',
-                    '-n', 'htdemucs',
+                    '-n', 'htdemucs_6s',  # Use 6-stem model
                     '--out', output_dir,
                     input_wav_path
                 ]
@@ -121,16 +133,16 @@ def separate_music_ai(request):
                     raise Exception(f"Demucs failed: {result.stderr}")
 
                 # Load separated stems
-                model_name = "htdemucs"
+                model_name = "htdemucs_6s"
                 file_name = "input"
                 stems_path = os.path.join(output_dir, model_name, file_name)
 
                 if not os.path.exists(stems_path):
                     raise Exception(f"Stems directory not found: {stems_path}")
 
-                # Read separated stems
+                # Read separated stems (6 stems for htdemucs_6s)
                 stems_data = {}
-                available_stems = ['drums', 'bass', 'other', 'vocals']
+                available_stems = ['drums', 'bass', 'vocals', 'guitar', 'piano', 'other']
 
                 for stem_name in available_stems:
                     stem_file = os.path.join(stems_path, f'{stem_name}.wav')
@@ -149,12 +161,10 @@ def separate_music_ai(request):
                         if len(stem_audio.shape) > 1:
                             stem_audio = np.mean(stem_audio, axis=1)
 
-                        # Only include requested stems
-                        if stem_name in requested_stems:
-                            stems_data[stem_name] = {
-                                'data': stem_audio.tolist(),
-                                'sampleRate': sr
-                            }
+                        stems_data[stem_name] = {
+                            'data': stem_audio.tolist(),
+                            'sampleRate': sr
+                        }
 
                 if not stems_data:
                     raise Exception("No stems were successfully separated")

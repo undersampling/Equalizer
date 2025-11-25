@@ -1,35 +1,44 @@
+/* === Main Container (Original Style Preserved) === */
 .cine-controller {
   background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
   border-radius: 12px;
-  padding: 20px;
+  padding: 15px 20px; /* Restored closer to original padding */
   margin: 20px 0;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
 }
 
+/* === Layout (Force Row) === */
 .controls-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
+  gap: 12px; /* Slightly reduced gap (was 20px) to fit one line */
+  flex-wrap: nowrap !important; /* FORCE single line */
+  width: 100%;
 }
 
+/* === Playback Buttons (Original Gradients Preserved) === */
 .playback-controls {
   display: flex;
   gap: 8px;
+  flex: 0 0 auto;
 }
 
 .control-btn {
-  padding: 10px 18px;
+  padding: 10px 16px; /* Slightly optimized padding, original look */
   border: none;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* Original Gradient */
   color: white;
   white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
 }
 
 .control-btn:hover:not(:disabled) {
@@ -37,19 +46,12 @@
   box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
 }
 
-.control-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.control-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.control-btn.play.active {
-  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-}
+.control-btn.play.active { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+.control-btn.pause.active { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
 
-.control-btn.pause.active {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
+/* === Time Display (Original Style) === */
 .time-display {
   display: flex;
   align-items: center;
@@ -58,28 +60,47 @@
   font-size: 16px;
   color: #00d4ff;
   font-weight: 600;
-  min-width: 150px;
+  min-width: auto; /* Removed fixed min-width to save space */
   justify-content: center;
+  flex: 0 0 auto;
+  background: rgba(0, 212, 255, 0.05);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 212, 255, 0.2);
 }
 
-.separator {
-  color: #666;
-}
+.separator { color: #666; }
 
+/* === Speed Control (Layout Adjusted, Style Preserved) === */
 .speed-control {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 0 1 auto; /* Allow shrinking */
+  justify-content: center;
+  min-width: auto; /* Removed 250px min-width */
+  background: rgba(15, 23, 42, 0.4); /* Preserved background */
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(125, 211, 252, 0.2);
 }
 
 .speed-control label {
   color: #fff;
   font-weight: 600;
   font-size: 14px;
+  white-space: nowrap;
+  display: none; /* Hide the label "Speed" to save space, keep clean look */
 }
 
+/* Show "Speed" label only on very wide screens */
+@media (min-width: 1400px) {
+  .speed-control label { display: block; }
+}
+
+/* === Slider (Smaller Width, Same Style) === */
 .speed-control input[type="range"] {
-  width: 150px;
+  width: 80px; /* The critical fix: Reduced from 200px */
   height: 6px;
   border-radius: 5px;
   background: #444;
@@ -96,24 +117,10 @@
   background: #00d4ff;
   cursor: pointer;
   transition: all 0.3s ease;
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
 }
 
 .speed-control input[type="range"]::-webkit-slider-thumb:hover {
-  background: #00ffff;
-  transform: scale(1.2);
-}
-
-.speed-control input[type="range"]::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #00d4ff;
-  cursor: pointer;
-  border: none;
-  transition: all 0.3s ease;
-}
-
-.speed-control input[type="range"]::-moz-range-thumb:hover {
   background: #00ffff;
   transform: scale(1.2);
 }
@@ -122,13 +129,19 @@
   color: #00d4ff;
   font-family: monospace;
   font-weight: 600;
-  min-width: 50px;
+  min-width: 40px;
   font-size: 14px;
+  text-align: right;
 }
 
 .quick-speed-controls {
   display: flex;
   gap: 5px;
+}
+
+/* Hide Quick Buttons on medium screens to ensure single line */
+@media (max-width: 1300px) {
+  .quick-speed-controls { display: none; }
 }
 
 .speed-btn {
@@ -151,23 +164,38 @@
 .view-controls {
   display: flex;
   gap: 8px;
+  flex: 0 0 auto;
 }
 
-/* Responsive design */
+/* === IMPORTANT: Media Query Override === */
+/* This prevents the "stacking" behavior you saw before */
 @media (max-width: 1200px) {
   .controls-row {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row !important; /* Keep it horizontal */
+    flex-wrap: nowrap !important;
+    gap: 8px;
+    overflow-x: auto; /* Allow scroll if screen is extremely small */
   }
 
-  .playback-controls,
-  .view-controls,
-  .quick-speed-controls {
-    justify-content: center;
+  .cine-controller {
+    padding: 10px 15px;
   }
+  
+  .control-btn {
+    padding: 8px 12px; /* Subtle shrink on tablets */
+    font-size: 13px;
+  }
+  
+  .time-display {
+      font-size: 14px;
+      padding: 6px 8px;
+  }
+}
 
-  .time-display,
-  .speed-control {
-    justify-content: center;
-  }
+/* Full width container override */
+.cine-controller-container {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
 }

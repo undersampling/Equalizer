@@ -11,7 +11,7 @@
         {
           "id": 1764010160900,
           "label": "Range 900",
-          "value": 2,
+          "value": 0.56,
           "min": 0,
           "max": 2,
           "minFreq": 0,
@@ -26,7 +26,7 @@
         {
           "id": 1764010981088,
           "label": "Range 88",
-          "value": 2,
+          "value": 1.19,
           "min": 0,
           "max": 2,
           "minFreq": 2675,
@@ -146,7 +146,7 @@
         {
           "id": 5,
           "label": "🎹 Piano",
-          "value": 0.18,
+          "value": 2,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -302,5 +302,5 @@
       ]
     }
   },
-  "lastUpdated": "2025-11-25T13:46:45.252993"
+  "lastUpdated": "2025-11-25T14:37:56.716674"
 }

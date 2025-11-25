@@ -2,15 +2,25 @@
 import React, { useMemo } from "react";
 import "../styles/EqualizerSlider.css";
 
-function EqualizerSlider({ slider, onChange, onRemove }) {
-  const handleValueChange = (e) => {
-    onChange(slider.id, parseFloat(e.target.value));
+function EqualizerSlider({ slider, onChange, onRemove, onMouseUp }) {
+  // Handle input event for real-time visual feedback only (no equalization)
+  const handleInput = (e) => {
+    // Update immediately for visual feedback (onInput fires continuously while dragging)
+    onChange(slider.id, parseFloat(e.target.value), false); // false = visual update only
   };
 
-  // Handle input event for real-time visual feedback
-  const handleInput = (e) => {
-    // Update immediately for visual feedback (onInput fires continuously)
-    onChange(slider.id, parseFloat(e.target.value));
+  // Handle change event (fires on mouse release in some browsers)
+  const handleValueChange = (e) => {
+    onChange(slider.id, parseFloat(e.target.value), false); // Still visual only, mouseUp will trigger equalization
+  };
+
+  // Handle mouse up - trigger equalization
+  const handleMouseUp = (e) => {
+    const value = parseFloat(e.target.value);
+    onChange(slider.id, value, false); // Update visual state
+    if (onMouseUp) {
+      onMouseUp(slider.id, value); // Trigger equalization
+    }
   };
 
   // Generate amplitude axis values
@@ -79,6 +89,8 @@ function EqualizerSlider({ slider, onChange, onRemove }) {
             value={slider.value}
             onInput={handleInput}
             onChange={handleValueChange}
+            onMouseUp={handleMouseUp}
+            onTouchEnd={handleMouseUp}
             className="slider-input"
           />
         </div>

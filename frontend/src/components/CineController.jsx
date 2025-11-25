@@ -37,7 +37,7 @@ function CineController({
             ⏸ Pause
           </button>
           <button className="control-btn stop" onClick={onStop}>
-            ⏹ Stop
+            ⏹ Reset
           </button>
           {onToggleAudio && (
             <button

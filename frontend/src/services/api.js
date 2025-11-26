@@ -1,7 +1,6 @@
-// frontend/src/services/api.js
-
 import axios from "axios";
 
+// Create axios instance with environment variable support
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000/api",
 });
@@ -14,8 +13,16 @@ export const apiService = {
   /**
    * Get all mode configurations
    */
-  getAllModes: () => {
-    return apiClient.get("/modes/all");
+  getAllModes: (category = null) => {
+    const url = category ? `/modes/${category}` : "/modes/all";
+    return apiClient.get(url);
+  },
+
+  /**
+   * Get specific mode config
+   */
+  getModeConfig: (modeName) => {
+    return apiClient.get(`/modes/${modeName}`);
   },
 
   /**
@@ -45,13 +52,15 @@ export const apiService = {
 
   /**
    * Apply equalization to signal
+   * CRITICAL UPDATE: 'preview' param enables fast graph updates
    */
-  equalize: (signal, sampleRate, sliders, mode) => {
+  equalize: (signal, sampleRate, sliders, mode, preview = false) => {
     return apiClient.post("/equalize", {
       signal,
       sampleRate,
       sliders,
       mode,
+      preview, // True = Fast Graph Update, False = Full Audio Update
     });
   },
 
@@ -69,7 +78,13 @@ export const apiService = {
   /**
    * Generate spectrogram from signal
    */
-  generateSpectrogram: (signal, sampleRate, useMel = true, nMels = 128, fmax = 8000) => {
+  generateSpectrogram: (
+    signal,
+    sampleRate,
+    useMel = true,
+    nMels = 128,
+    fmax = 8000
+  ) => {
     return apiClient.post("/spectrogram", {
       signal,
       sampleRate,
@@ -124,21 +139,11 @@ export const apiService = {
   },
 
   /**
-   * Mix music stems (for AI model mode)
+   * Mix music stems (Alias for mixStems if used by AI components)
    */
   mixMusic: (stems, sampleRate) => {
-    return apiClient.post("/music/mix", {
+    return apiClient.post("/mix-stems", {
       stems,
-      sampleRate,
-    });
-  },
-
-  /**
-   * Separate generic audio (for unified controller)
-   */
-  separate: (signal, sampleRate) => {
-    return apiClient.post("/separate", {
-      signal,
       sampleRate,
     });
   },

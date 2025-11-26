@@ -5,12 +5,14 @@ from multiprocessing import Pool, cpu_count
 
 # FFT cache for performance optimization
 _fft_cache = {}
+_stft_cache = {}  # NEW: Cache for STFT magnitudes (Spectrograms)
 
 def clear_fft_cache():
-    """Clear the FFT cache. Useful for memory management or when signal changes."""
-    global _fft_cache
+    """Clear the FFT and STFT cache. Useful for memory management or when signal changes."""
+    global _fft_cache, _stft_cache
     _fft_cache.clear()
-    print("🗑️ FFT cache cleared")
+    _stft_cache.clear()
+    print("🗑️ FFT and STFT caches cleared")
 
 def get_signal_hash(signal, sample_rate):
     """
@@ -397,6 +399,99 @@ def fft_magnitude_phase(signal_data):
         print(f"❌ FFT magnitude/phase error: {e}")
         raise
 
+# ==========================================
+# NEW OPTIMIZED FUNCTION FOR INSTANT PREVIEW
+# ==========================================
+def apply_filter_to_spectrogram(original_signal, sample_rate, sliders, n_fft=2048, hop_length=512, n_mels=128, fmax=8000):
+    """
+    Applies EQ gains directly to the cached Spectrogram magnitudes.
+    Bypasses IFFT and Re-STFT. Extremely fast (~50ms response).
+    """
+    try:
+        if not isinstance(original_signal, np.ndarray):
+            original_signal = np.array(original_signal, dtype=float)
+
+        signal_hash = get_signal_hash(original_signal, sample_rate)
+        
+        # 1. Get or Compute Base STFT (Cached)
+        if signal_hash in _stft_cache:
+            # Retrieve magnitude from cache
+            stft_magnitude = _stft_cache[signal_hash]
+        else:
+            # Compute from scratch
+            stft_complex = stft_custom(original_signal, n_fft=n_fft, hop_length=hop_length)
+            stft_magnitude = np.abs(stft_complex)
+            # Cache the magnitude (we don't need phase for visualization)
+            _stft_cache[signal_hash] = stft_magnitude
+
+        # 2. Build Frequency Gain Vector
+        # The STFT has rows corresponding to frequency bins. We need a gain value for each row.
+        d = 1.0 / sample_rate
+        freq_bins = fftfreq_custom(n_fft, d)[:n_fft//2 + 1]
+        gain_vector = np.ones(len(freq_bins))
+
+        # Check for sliders
+        if sliders:
+            for slider in sliders:
+                gain = float(slider.get('value', 1.0))
+                # Skip if unity gain
+                if abs(gain - 1.0) < 0.001: 
+                    continue
+                
+                freq_ranges = slider.get('freqRanges', [])
+                for (f_min, f_max) in freq_ranges:
+                    # Apply gain to all bins in this range
+                    mask = (freq_bins >= f_min) & (freq_bins <= f_max)
+                    gain_vector[mask] *= gain
+
+        # 3. Apply Gain to Magnitude (Broadcasting)
+        # stft_magnitude shape is (num_freqs, num_frames). gain_vector is (num_freqs).
+        # We multiply column-wise: gain_vector needs to be shape (num_freqs, 1)
+        modified_magnitude = stft_magnitude * gain_vector[:, np.newaxis]
+
+        # 4. Convert to Mel / dB for Visualization (Logic same as compute_spectrogram)
+        power = modified_magnitude ** 2
+        
+        # Use Mel Filter Bank
+        mel_bank = mel_filter_bank_custom(sample_rate, n_fft, n_mels=n_mels, fmin=0.0, fmax=fmax)
+        mel_spectrogram = np.dot(mel_bank, power)
+        
+        epsilon = 1e-10
+        mel_spectrogram = np.maximum(mel_spectrogram, epsilon)
+        
+        # Convert to dB
+        S_dB = power_to_db_custom(mel_spectrogram, ref=np.max(mel_spectrogram))
+        
+        # Clip for visualization consistency
+        S_dB_flat = S_dB.flatten()
+        percentile_5 = np.percentile(S_dB_flat, 5) if len(S_dB_flat) > 0 else -80
+        S_dB_min = max(percentile_5, -80)
+        S_dB = np.clip(S_dB, S_dB_min, 0)
+
+        # Generate Axes
+        n_frames = S_dB.shape[1]
+        times = np.array([i * hop_length / sample_rate for i in range(n_frames)])
+        freqs = mel_frequencies_custom(n_mels=n_mels, fmin=0.0, fmax=fmax)
+
+        # Decimate for faster network transfer (Visuals don't need infinite precision)
+        max_time_points = 800
+        if len(times) > max_time_points:
+            step = max(1, len(times) // max_time_points)
+            times = times[::step]
+            S_dB = S_dB[:, ::step]
+
+        return {
+            'z': S_dB.tolist(),
+            'x': times.tolist(),
+            'y': freqs.tolist()
+        }
+
+    except Exception as e:
+        print(f"❌ Preview generation failed: {e}")
+        # Fallback to empty if fails
+        return {'z': [], 'x': [], 'y': []}
+
+
 def apply_equalization(signal, sample_rate, sliders):
     """
     Apply equalization with proper frequency removal and identity preservation
@@ -416,7 +511,7 @@ def apply_equalization(signal, sample_rate, sliders):
             print("⚠️ Cleaning NaN/Inf from input signal")
             signal = np.nan_to_num(signal, nan=0.0, posinf=0.0, neginf=0.0)
 
-        # ✅ CRITICAL FIX: Check if all sliders are at unity (1.0)
+        # Check if all sliders are at unity (1.0)
         all_unity = True
         for slider in sliders:
             value = float(slider.get('value', 1.0))
@@ -473,7 +568,7 @@ def apply_equalization_direct(signal, sample_rate, sliders, original_length, sig
     
     N = len(fft_result)
     
-    # ✅ Start with unity gain everywhere (1.0 = no change)
+    # Start with unity gain everywhere (1.0 = no change)
     gain_mask = np.ones(N, dtype=np.float64)  # Use float64 for better precision
 
     # Apply each slider's equalization
@@ -484,7 +579,7 @@ def apply_equalization_direct(signal, sample_rate, sliders, original_length, sig
 
         gain_factor = float(slider.get('value', 1.0))
         
-        # ✅ Skip processing if gain is exactly 1.0
+        # Skip processing if gain is exactly 1.0
         if abs(gain_factor - 1.0) < 1e-9:
             continue
         

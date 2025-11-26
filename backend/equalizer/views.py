@@ -2,7 +2,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 import numpy as np
-from .utils import fft_magnitude_phase, compute_spectrogram, apply_equalization, fftfreq_custom
+from .utils import fft_magnitude_phase, compute_spectrogram, apply_equalization, apply_filter_to_spectrogram, fftfreq_custom
 
 import os
 import subprocess
@@ -62,22 +62,6 @@ def get_voice_separation_model():
 def separate_music_ai(request):
     """
     Separate music using Demucs 6-stem AI model
-    Expected payload:
-    {
-        "signal": [array of floats],
-        "sampleRate": float
-    }
-    Returns:
-    {
-        "stems": {
-            "drums": {"data": [...], "sampleRate": float},
-            "bass": {"data": [...], "sampleRate": float},
-            "vocals": {"data": [...], "sampleRate": float},
-            "guitar": {"data": [...], "sampleRate": float},
-            "piano": {"data": [...], "sampleRate": float},
-            "other": {"data": [...], "sampleRate": float}
-        }
-    }
     """
     try:
         signal_data = request.data.get('signal', [])
@@ -196,20 +180,6 @@ def separate_music_ai(request):
 def apply_stem_mixing(request):
     """
     Mix separated stems with individual gain controls
-    Expected payload:
-    {
-        "stems": {
-            "drums": {"data": [...], "gain": float},
-            "bass": {"data": [...], "gain": float},
-            ...
-        },
-        "sampleRate": float
-    }
-    Returns:
-    {
-        "mixedSignal": [array of floats],
-        "sampleRate": float
-    }
     """
     try:
         stems_data = request.data.get('stems', {})
@@ -365,77 +335,7 @@ def compute_fft(request):
 @api_view(['POST'])
 def compute_spectrogram_view(request):
     """
-    Compute spectrogram with comprehensive error handling
-    """
-    try:
-        signal_data = request.data.get('signal', [])
-        sample_rate = float(request.data.get('sampleRate', 44100))
-        n_fft = request.data.get('n_fft', 2048)
-        hop_length = request.data.get('hop_length', 512)
-        n_mels = request.data.get('n_mels', 128)
-        fmax = request.data.get('fmax', 8000)
-        use_mel = request.data.get('use_mel', True)
-        max_time_points = request.data.get('max_time_points', 800)
-        max_freq_points = request.data.get('max_freq_points', 600)
-
-        print(f"📊 Spectrogram Request: signal length={len(signal_data)}, sr={sample_rate}, use_mel={use_mel}")
-
-        if not signal_data:
-            return Response(
-                {'error': 'Signal data is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Convert to numpy array
-        signal = np.array(signal_data, dtype=float)
-
-        # Handle NaN or Inf values
-        if np.any(np.isnan(signal)) or np.any(np.isinf(signal)):
-            print("⚠️ Cleaning NaN/Inf from signal")
-            signal = np.nan_to_num(signal, nan=0.0, posinf=0.0, neginf=0.0)
-
-        # Compute spectrogram
-        spectrogram_data = compute_spectrogram(
-            signal,
-            sample_rate,
-            n_fft=n_fft,
-            hop_length=hop_length,
-            n_mels=n_mels,
-            fmax=fmax,
-            use_mel=use_mel,
-            max_time_points=max_time_points,
-            max_freq_points=max_freq_points
-        )
-
-        print(f"✅ Spectrogram Success")
-
-        return Response(spectrogram_data, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        print(f"❌ Spectrogram Exception: {e}")
-        import traceback
-        traceback.print_exc()
-        return Response(
-            {'error': f'Spectrogram computation failed: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-@api_view(['POST'])
-def compute_spectrogram_view(request):
-    """
     Compute spectrogram of input signal
-    Expected payload:
-    {
-        "signal": [array of floats],
-        "sampleRate": float,
-        "n_fft": int (optional, default 2048),
-        "hop_length": int (optional, default 512),
-        "n_mels": int (optional, default 128),
-        "fmax": float (optional, default 8000),
-        "use_mel": bool (optional, default true),
-        "max_time_points": int (optional),
-        "max_freq_points": int (optional)
-    }
     """
     try:
         signal_data = request.data.get('signal', [])
@@ -447,7 +347,6 @@ def compute_spectrogram_view(request):
         use_mel = request.data.get('use_mel', True)
         
         # Default to reasonable display limits if not provided
-        # 800x600 is a good target for spectrogram heatmap
         max_time_points = request.data.get('max_time_points', 800)
         max_freq_points = request.data.get('max_freq_points', 600)
 
@@ -489,29 +388,25 @@ def compute_spectrogram_view(request):
 @api_view(['POST'])
 def equalize_signal(request):
     """
-    Apply equalization with detailed logging
+    Apply equalization with PREVIEW support.
+    
+    If 'preview' is True in request data:
+        - Returns ONLY spectrogram data derived mathematically (Fast, ~100KB)
+        - DOES NOT compute full audio (Slow, ~30MB)
+        
+    If 'preview' is False (default):
+        - Returns FULL filtered audio for playback
     """
     try:
         signal_data = request.data.get('signal', [])
         sample_rate = float(request.data.get('sampleRate', 44100))
         sliders = request.data.get('sliders', [])
-
-        print(f"\n{'='*60}")
-        print(f"📥 EQUALIZATION REQUEST")
-        print(f"{'='*60}")
-        print(f"Signal length: {len(signal_data)} samples")
-        print(f"Sample rate: {sample_rate} Hz")
-        print(f"Number of sliders: {len(sliders)}")
         
-        for i, slider in enumerate(sliders):
-            print(f"  Slider {i}: {slider.get('label')} = {slider.get('value')}")
-            print(f"    Ranges: {slider.get('freqRanges')}")
+        # NEW FLAG: Check if this is just a graph preview request
+        is_preview = request.data.get('preview', False)
 
         if not signal_data:
-            return Response(
-                {'error': 'Signal data is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': 'Signal data is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Convert to numpy array
         signal = np.array(signal_data, dtype=float)
@@ -522,56 +417,48 @@ def equalize_signal(request):
 
         # Validate sample rate
         if sample_rate <= 0:
-            return Response(
-                {'error': 'Sample rate must be positive'},
-                status=status.HTTP_400_BAD_REQUEST
+            return Response({'error': 'Sample rate must be positive'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # === PREVIEW MODE (FAST GRAPH UPDATE) ===
+        if is_preview:
+            # Bypass IFFT, only calculate frequency domain changes for graph
+            spectrogram_data = apply_filter_to_spectrogram(
+                signal, 
+                sample_rate, 
+                sliders
             )
+            return Response({
+                'spectrogram': spectrogram_data,
+                'isPreview': True
+            }, status=status.HTTP_200_OK)
 
-        # Apply equalization
+        # === FULL MODE (AUDIO PLAYBACK) ===
+        # Apply full equalization including IFFT
+        print(f"\n{'='*60}")
+        print(f"📥 EQUALIZATION REQUEST (FULL AUDIO)")
         output_signal = apply_equalization(signal, sample_rate, sliders)
-
-        print(f"✅ Equalization successful!")
         print(f"{'='*60}\n")
 
         # Return with SAME sample rate
         return Response({
             'outputSignal': output_signal.tolist(),
-            'sampleRate': sample_rate
+            'sampleRate': sample_rate,
+            'isPreview': False
         }, status=status.HTTP_200_OK)
 
     except ValueError as e:
         print(f"❌ ValueError: {e}")
-        return Response(
-            {'error': f'Invalid input: {str(e)}'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({'error': f'Invalid input: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         print(f"❌ Exception: {e}")
         import traceback
         traceback.print_exc()
-        return Response(
-            {'error': f'Equalization failed: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({'error': f'Equalization failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 def separate_voices_ai(request):
     """
     Separate human voices using SpeechBrain SepformerSeparation
-    Expected payload:
-    {
-        "signal": [array of floats],
-        "sampleRate": float
-    }
-    Returns:
-    {
-        "voices": {
-            "voice_0": {"data": [...], "sampleRate": float},
-            "voice_1": {"data": [...], "sampleRate": float},
-            "voice_2": {"data": [...], "sampleRate": float}
-        },
-        "originalSampleRate": float
-    }
     """
     try:
         signal_data = request.data.get('signal', [])
@@ -611,7 +498,6 @@ def separate_voices_ai(request):
         separated_sources = est_sources[0].cpu()  # Get first batch item
         
         # Handle different tensor shapes from SpeechBrain
-        # Shape could be [1, samples, num_voices] or [samples, num_voices]
         if len(separated_sources.shape) == 3:
             # Shape: [1, samples, num_voices]
             separated_sources = separated_sources.squeeze(0)  # Remove batch dimension: [samples, num_voices]
@@ -678,21 +564,7 @@ def separate_voices_ai(request):
 @api_view(['POST'])
 def mix_voices_with_gains(request):
     """
-    Mix separated voices with individual gain controls (0.0 to 2.0)
-    Expected payload:
-    {
-        "voices": {
-            "voice_0": {"data": [...], "gain": float},
-            "voice_1": {"data": [...], "gain": float},
-            "voice_2": {"data": [...], "gain": float}
-        },
-        "sampleRate": float
-    }
-    Returns:
-    {
-        "mixedSignal": [array of floats],
-        "sampleRate": float
-    }
+    Mix separated voices with individual gain controls
     """
     try:
         voices_data = request.data.get('voices', {})

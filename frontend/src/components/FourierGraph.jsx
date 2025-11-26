@@ -1,250 +1,498 @@
-// components/FourierGraph.jsx
-import React, { useEffect, useRef } from 'react';
-import '../styles/FourierGraph.css';
+// import React, { useEffect, useRef } from "react";
+// import "../styles/FourierGraph.css";
 
-function FourierGraph({ fourierData, scale = 'linear', title = 'Fourier Transform', isLoading, error }) {
+// function FourierGraph({
+//   fourierData,
+//   scale = "linear",
+//   title = "Fourier Transform",
+//   isLoading,
+//   error,
+// }) {
+//   const canvasRef = useRef(null);
+
+//   useEffect(() => {
+//     if (!fourierData || !canvasRef.current) return;
+
+//     if (!fourierData.frequencies || !fourierData.magnitudes) {
+//       return;
+//     }
+
+//     const canvas = canvasRef.current;
+//     const ctx = canvas.getContext("2d");
+//     const width = canvas.width;
+//     const height = canvas.height;
+
+//     // 1. Clear canvas
+//     ctx.clearRect(0, 0, width, height);
+//     // 2. Opaque background
+//     ctx.fillStyle = "rgb(15, 23, 42)";
+//     ctx.fillRect(0, 0, width, height);
+
+//     drawFFTGraph(ctx, fourierData, width, height, scale);
+//   }, [fourierData, scale]);
+
+//   const drawFFTGraph = (ctx, fourierData, width, height, scale) => {
+//     const frequencies = fourierData.frequencies || [];
+//     const magnitudes = fourierData.magnitudes || [];
+
+//     if (frequencies.length === 0 || magnitudes.length === 0) return;
+
+//     const minLength = Math.min(frequencies.length, magnitudes.length);
+//     const frequencies_trimmed = frequencies.slice(0, minLength);
+//     const magnitudes_trimmed = magnitudes.slice(0, minLength);
+
+//     // 1. Find Global Max Magnitude (for normalization)
+//     let maxMagnitude = 0;
+//     for (let i = 0; i < minLength; i++) {
+//       if (magnitudes_trimmed[i] > maxMagnitude)
+//         maxMagnitude = magnitudes_trimmed[i];
+//     }
+//     if (maxMagnitude === 0) maxMagnitude = 1;
+
+//     // 2. Calculate Max Frequency
+//     const signalMaxFreq = frequencies_trimmed[frequencies_trimmed.length - 1];
+
+//     // Define Log limits (Log(0) is impossible, so we start at 20Hz - standard human hearing start)
+//     const minLogFreq = 20;
+//     const maxLogFreq = Math.max(20000, signalMaxFreq);
+
+//     const padding = 50;
+//     const graphWidth = width - padding * 2;
+//     const graphHeight = height - padding * 2;
+
+//     // === DRAW GRID ===
+//     ctx.strokeStyle = "rgba(125, 211, 252, 0.1)";
+//     ctx.lineWidth = 0.5;
+//     for (let i = 0; i <= 10; i++) {
+//       const x = padding + (graphWidth / 10) * i;
+//       const y = padding + (graphHeight / 10) * i;
+//       ctx.beginPath();
+//       ctx.moveTo(x, padding);
+//       ctx.lineTo(x, height - padding);
+//       ctx.stroke();
+//       ctx.beginPath();
+//       ctx.moveTo(padding, y);
+//       ctx.lineTo(width - padding, y);
+//       ctx.stroke();
+//     }
+
+//     // === PROCESS DATA POINTS ===
+//     let points = [];
+
+//     if (scale === "audiogram") {
+//       // === AUDIOGRAM MODE: Log Frequency (X), Decibels (Y) ===
+//       const minLog = Math.log10(minLogFreq);
+//       const maxLog = Math.log10(maxLogFreq);
+//       const logRange = maxLog - minLog;
+
+//       for (let i = 0; i < minLength; i++) {
+//         const freq = frequencies_trimmed[i];
+//         const mag = magnitudes_trimmed[i];
+
+//         if (freq >= minLogFreq && freq <= maxLogFreq) {
+//           // X: Logarithmic mapping
+//           const fractionX = (Math.log10(freq) - minLog) / logRange;
+
+//           // Y: Decibel mapping (0dB top, -100dB bottom)
+//           // dB = 20 * log10(mag / max)
+//           let db = 20 * Math.log10((mag + 1e-9) / maxMagnitude);
+//           if (db < -100) db = -100; // Floor at -100dB
+
+//           // Normalize Y to 0..1 range (where 1 is 0dB/Top, 0 is -100dB/Bottom)
+//           const fractionY = (db + 100) / 100;
+
+//           if (fractionX >= 0 && fractionX <= 1) {
+//             points.push({ x: fractionX, y: fractionY, freq });
+//           }
+//         }
+//       }
+//     } else {
+//       // === LINEAR MODE: Linear Frequency (X), Linear Amplitude (Y) ===
+//       for (let i = 0; i < minLength; i++) {
+//         const fractionX = i / (minLength - 1);
+//         // Y is simple linear ratio of max magnitude
+//         const fractionY = magnitudes_trimmed[i] / maxMagnitude;
+
+//         points.push({
+//           x: fractionX,
+//           y: fractionY,
+//           freq: frequencies_trimmed[i],
+//         });
+//       }
+//     }
+
+//     // === DECIMATION (Optimize rendering speed) ===
+//     const maxDisplayPoints = 2000;
+//     if (points.length > maxDisplayPoints) {
+//       const blockSize = points.length / maxDisplayPoints;
+//       const decimated = [];
+//       for (let i = 0; i < maxDisplayPoints; i++) {
+//         const start = Math.floor(i * blockSize);
+//         const end = Math.floor((i + 1) * blockSize);
+//         let maxY = -Infinity;
+//         let bestPoint = null;
+//         for (let j = start; j < end && j < points.length; j++) {
+//           if (points[j].y > maxY) {
+//             maxY = points[j].y;
+//             bestPoint = points[j];
+//           }
+//         }
+//         if (bestPoint) decimated.push(bestPoint);
+//       }
+//       points = decimated;
+//     }
+
+//     if (points.length === 0) return;
+
+//     // === DRAW THE LINE ===
+//     const mapYToPixel = (normalizedY) => {
+//       // normalizedY is 0..1.
+//       // In Canvas, 0 is top. We want 1.0 (High amp) to be at top (padding).
+//       // We want 0.0 (Silence) to be at bottom (height - padding).
+//       return height - padding - normalizedY * graphHeight;
+//     };
+
+//     ctx.strokeStyle = "#7dd3fc";
+//     ctx.lineWidth = 2;
+//     ctx.beginPath();
+
+//     for (let i = 0; i < points.length; i++) {
+//       const p = points[i];
+//       const x = padding + p.x * graphWidth;
+//       const y = mapYToPixel(p.y);
+
+//       if (i === 0) ctx.moveTo(x, y);
+//       else ctx.lineTo(x, y);
+//     }
+//     ctx.stroke();
+
+//     // === FILL AREA ===
+//     const lastP = points[points.length - 1];
+//     const lastX = padding + lastP.x * graphWidth;
+//     ctx.lineTo(lastX, height - padding); // Bottom Right
+//     ctx.lineTo(padding, height - padding); // Bottom Left
+//     ctx.closePath();
+//     ctx.fillStyle = "rgba(125, 211, 252, 0.1)";
+//     ctx.fill();
+
+//     // === DRAW AXES & LABELS ===
+//     ctx.strokeStyle = "rgba(125, 211, 252, 0.3)";
+//     ctx.lineWidth = 1;
+//     ctx.beginPath();
+//     ctx.moveTo(padding, padding);
+//     ctx.lineTo(padding, height - padding);
+//     ctx.lineTo(width - padding, height - padding);
+//     ctx.stroke();
+
+//     ctx.fillStyle = "#94a3b8";
+//     ctx.font = "11px Arial";
+//     ctx.textAlign = "center";
+
+//     const numTicks = 5;
+
+//     // --- X-AXIS LABELS ---
+//     if (scale === "audiogram") {
+//       // Logarithmic Labels
+//       const minLog = Math.log10(minLogFreq);
+//       const maxLog = Math.log10(maxLogFreq);
+//       const logRange = maxLog - minLog;
+
+//       for (let i = 0; i <= numTicks; i++) {
+//         const t = i / numTicks;
+//         const x = padding + t * graphWidth;
+
+//         // Calculate freq at this visual position
+//         const freqVal = Math.pow(10, minLog + t * logRange);
+
+//         let label;
+//         if (freqVal >= 1000) label = (freqVal / 1000).toFixed(1) + "k";
+//         else label = freqVal.toFixed(0);
+
+//         ctx.fillText(label + " Hz", x, height - padding + 20);
+//       }
+//     } else {
+//       // Linear Labels
+//       for (let i = 0; i <= numTicks; i++) {
+//         const x = padding + (graphWidth / numTicks) * i;
+//         const freqVal = (signalMaxFreq / numTicks) * i;
+
+//         let label;
+//         if (freqVal >= 1000) label = (freqVal / 1000).toFixed(1) + "k";
+//         else label = freqVal.toFixed(0);
+
+//         ctx.fillText(label + " Hz", x, height - padding + 20);
+//       }
+//     }
+
+//     // --- Y-AXIS LABELS ---
+//     ctx.textAlign = "right";
+//     for (let i = 0; i <= numTicks; i++) {
+//       const y = padding + (graphHeight / numTicks) * i;
+//       let label;
+
+//       if (scale === "audiogram") {
+//         // Label in dB (0dB at top, -100dB at bottom)
+//         // i=0 -> Top -> 0dB
+//         // i=5 -> Bottom -> -100dB
+//         const db = -(i / numTicks) * 100;
+//         label = db.toFixed(0) + " dB";
+//       } else {
+//         // Label in Linear Amp (Max at top, 0 at bottom)
+//         const amp = maxMagnitude * (1 - i / numTicks);
+//         label = amp.toFixed(1);
+//       }
+
+//       ctx.fillText(label, padding - 10, y + 4);
+//     }
+//   };
+
+//   return (
+//     <div className="fourier-graph" style={{ position: "relative" }}>
+//       <h3 className="fourier-graph-title">{title}</h3>
+//       <div style={{ position: "relative" }}>
+//         <canvas
+//           ref={canvasRef}
+//           width={900}
+//           height={350}
+//           className="fourier-graph-canvas"
+//         />
+//         {isLoading && (
+//           <div
+//             style={{
+//               color: "#94a3b8",
+//               position: "absolute",
+//               top: "50%",
+//               left: "50%",
+//               transform: "translate(-50%, -50%)",
+//             }}
+//           >
+//             Loading...
+//           </div>
+//         )}
+//         {error && (
+//           <div
+//             style={{
+//               color: "#ef4444",
+//               position: "absolute",
+//               top: "50%",
+//               left: "50%",
+//               transform: "translate(-50%, -50%)",
+//             }}
+//           >
+//             Error: {error}
+//           </div>
+//         )}
+//       </div>
+//     </div>
+//   );
+// }
+
+// export default FourierGraph;
+import React, { useEffect, useRef } from "react";
+import "../styles/FourierGraph.css";
+
+function FourierGraph({
+  fourierData,
+  scale = "linear",
+  title = "Fourier Transform",
+  isLoading,
+  error,
+}) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
-    if (!fourierData || !canvasRef.current) {
-      return;
-    }
-
-    if (!fourierData.frequencies || !fourierData.magnitudes) {
-      console.warn('FourierGraph: Invalid data structure', fourierData);
-      return;
-    }
-
-    if (fourierData.frequencies.length === 0 || fourierData.magnitudes.length === 0) {
-      console.warn('FourierGraph: Empty data arrays');
-      return;
-    }
+    if (!fourierData || !canvasRef.current) return;
+    if (!fourierData.frequencies || !fourierData.magnitudes) return;
 
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     const width = canvas.width;
     const height = canvas.height;
 
-    // Clear canvas
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    // Ghosting fix
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = "rgb(15, 23, 42)";
     ctx.fillRect(0, 0, width, height);
 
     drawFFTGraph(ctx, fourierData, width, height, scale);
-
   }, [fourierData, scale]);
 
   const drawFFTGraph = (ctx, fourierData, width, height, scale) => {
     const frequencies = fourierData.frequencies || [];
     const magnitudes = fourierData.magnitudes || [];
 
-    if (frequencies.length === 0 || magnitudes.length === 0) {
-      return;
-    }
+    if (frequencies.length === 0 || magnitudes.length === 0) return;
 
-    // Ensure arrays have the same length
     const minLength = Math.min(frequencies.length, magnitudes.length);
     const frequencies_trimmed = frequencies.slice(0, minLength);
     const magnitudes_trimmed = magnitudes.slice(0, minLength);
 
-    // Drawing parameters
+    // Find Signal Max Freq (Nyquist)
+    const signalMaxFreq = frequencies_trimmed[frequencies_trimmed.length - 1];
+
+    // Find Max Magnitude for Normalization
+    let maxLinearMag = 0;
+    for (let i = 0; i < minLength; i++) {
+      if (magnitudes_trimmed[i] > maxLinearMag)
+        maxLinearMag = magnitudes_trimmed[i];
+    }
+    if (maxLinearMag === 0) maxLinearMag = 1;
+
     const padding = 50;
     const graphWidth = width - padding * 2;
     const graphHeight = height - padding * 2;
 
-    // Draw grid
-    ctx.strokeStyle = 'rgba(125, 211, 252, 0.1)';
-    ctx.lineWidth = 0.5;
-    for (let i = 0; i <= 10; i++) {
-      const x = padding + (graphWidth / 10) * i;
-      const y = padding + (graphHeight / 10) * i;
+    let points = [];
 
-      // Vertical lines
-      ctx.beginPath();
-      ctx.moveTo(x, padding);
-      ctx.lineTo(x, height - padding);
-      ctx.stroke();
+    if (scale === "audiogram") {
+      // === AUDIOGRAM (Log Scale / dB) ===
+      const minLogFreq = 20;
+      const maxLogFreq = Math.max(8000, signalMaxFreq);
+      const minLog = Math.log10(minLogFreq);
+      const maxLog = Math.log10(maxLogFreq);
+      const logRange = maxLog - minLog;
 
-      // Horizontal lines
-      ctx.beginPath();
-      ctx.moveTo(padding, y);
-      ctx.lineTo(width - padding, y);
-      ctx.stroke();
-    }
-
-    // Process data based on scale
-    let processedData = [];
-    
-    if (scale === 'audiogram') {
-      // Audiogram scale: logarithmic frequency axis
-      // Filter frequencies to typical audiogram range (125 Hz to 8000 Hz)
-      const minFreq = 125;
-      const maxFreq = 8000;
-      
-      for (let i = 0; i < frequencies_trimmed.length; i++) {
+      for (let i = 0; i < minLength; i++) {
         const freq = frequencies_trimmed[i];
-        if (freq >= minFreq && freq <= maxFreq) {
-          // Convert frequency to logarithmic position
-          const logPos = Math.log2(freq / minFreq) / Math.log2(maxFreq / minFreq);
-          processedData.push({
-            x: logPos,
-            y: magnitudes_trimmed[i],
-            freq: freq
-          });
-        }
-      }
-      
-      // If no data in audiogram range, use all data
-      if (processedData.length === 0) {
-        for (let i = 0; i < frequencies_trimmed.length; i++) {
-          const freq = frequencies_trimmed[i];
-          if (freq > 0) {
-            const logPos = Math.log2(freq / (frequencies_trimmed[0] || 1));
-            const maxLog = Math.log2((frequencies_trimmed[frequencies_trimmed.length - 1] || 1) / (frequencies_trimmed[0] || 1));
-            processedData.push({
-              x: maxLog > 0 ? logPos / maxLog : 0,
-              y: magnitudes_trimmed[i],
-              freq: freq
-            });
+        const mag = magnitudes_trimmed[i];
+        if (freq >= minLogFreq && freq <= maxLogFreq) {
+          const fractionX = (Math.log10(freq) - minLog) / logRange;
+          // dB calculation (0dB at max, -100dB floor)
+          let db = 20 * Math.log10((mag + 1e-9) / maxLinearMag);
+          if (db < -100) db = -100;
+          const fractionY = (db + 100) / 100;
+
+          if (fractionX >= 0 && fractionX <= 1) {
+            points.push({ x: fractionX, y: fractionY, freq, val: db });
           }
         }
       }
     } else {
-      // Linear scale
-      for (let i = 0; i < frequencies_trimmed.length; i++) {
-        processedData.push({
-          x: i / (frequencies_trimmed.length - 1),
-          y: magnitudes_trimmed[i],
-          freq: frequencies_trimmed[i]
+      // === LINEAR ===
+      for (let i = 0; i < minLength; i++) {
+        const fractionX = i / (minLength - 1);
+        const fractionY = magnitudes_trimmed[i] / maxLinearMag;
+        points.push({
+          x: fractionX,
+          y: fractionY,
+          freq: frequencies_trimmed[i],
         });
       }
     }
 
-    if (processedData.length === 0) {
-      return;
-    }
+    if (points.length === 0) return;
 
-    // Visual Decimation: Reduce points for rendering while preserving peaks
+    // Decimation
     const maxDisplayPoints = 2000;
-    if (processedData.length > maxDisplayPoints) {
-      const blockSize = processedData.length / maxDisplayPoints;
+    if (points.length > maxDisplayPoints) {
+      const blockSize = points.length / maxDisplayPoints;
       const decimated = [];
-      
       for (let i = 0; i < maxDisplayPoints; i++) {
         const start = Math.floor(i * blockSize);
         const end = Math.floor((i + 1) * blockSize);
-        
-        let maxVal = -Infinity;
-        let maxPoint = null;
-        
-        for (let j = start; j < end && j < processedData.length; j++) {
-          if (processedData[j].y > maxVal) {
-            maxVal = processedData[j].y;
-            maxPoint = processedData[j];
+        let bestPoint = null;
+        let maxY = -Infinity;
+        for (let j = start; j < end && j < points.length; j++) {
+          if (points[j].y > maxY) {
+            maxY = points[j].y;
+            bestPoint = points[j];
           }
         }
-        
-        if (maxPoint) {
-          decimated.push(maxPoint);
-        }
+        if (bestPoint) decimated.push(bestPoint);
       }
-      processedData = decimated;
+      points = decimated;
     }
 
-    // Calculate max magnitude for scaling
-    let maxMagnitude = 0;
-    if (processedData.length > 0) {
-      maxMagnitude = processedData.reduce((max, p) => (p.y > max ? p.y : max), 0);
+    // Grid
+    ctx.strokeStyle = "rgba(125, 211, 252, 0.1)";
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= 10; i++) {
+      const pos = padding + (graphWidth / 10) * i;
+      ctx.beginPath();
+      ctx.moveTo(pos, padding);
+      ctx.lineTo(pos, height - padding);
+      ctx.stroke();
+      const posY = padding + (graphHeight / 10) * i;
+      ctx.beginPath();
+      ctx.moveTo(padding, posY);
+      ctx.lineTo(width - padding, posY);
+      ctx.stroke();
     }
-    if (maxMagnitude === 0) maxMagnitude = 1;
 
-    // Draw FFT line
-    ctx.strokeStyle = '#7dd3fc';
+    // Line
+    ctx.strokeStyle = "#7dd3fc";
     ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
     ctx.beginPath();
-    for (let i = 0; i < processedData.length; i++) {
-      const point = processedData[i];
-      const x = padding + point.x * graphWidth;
-      const y = height - padding - (point.y / maxMagnitude) * graphHeight;
-
-      if (i === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
-      }
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      const x = padding + p.x * graphWidth;
+      const y = height - padding - p.y * graphHeight;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
     }
     ctx.stroke();
 
-    // Fill under curve
-    if (processedData.length > 0) {
-      const lastPoint = processedData[processedData.length - 1];
-      const lastX = padding + lastPoint.x * graphWidth;
-      ctx.lineTo(lastX, height - padding);
-      ctx.lineTo(padding, height - padding);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(125, 211, 252, 0.1)';
-      ctx.fill();
-    }
-
-    // Draw axes
-    ctx.strokeStyle = 'rgba(125, 211, 252, 0.3)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(padding, padding);
+    // Fill
+    const lastP = points[points.length - 1];
+    ctx.lineTo(padding + lastP.x * graphWidth, height - padding);
     ctx.lineTo(padding, height - padding);
-    ctx.lineTo(width - padding, height - padding);
-    ctx.stroke();
+    ctx.closePath();
+    ctx.fillStyle = "rgba(125, 211, 252, 0.1)";
+    ctx.fill();
 
-    // Draw axis labels
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '11px Arial';
-    ctx.textAlign = 'center';
+    // Labels
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "11px Arial";
+    ctx.textAlign = "center";
 
-    // X-axis labels (frequency)
-    if (scale === 'audiogram') {
-      // Audiogram scale: show octave frequencies
-      const audiogramFreqs = [125, 250, 500, 1000, 2000, 4000, 8000,16000];
-      const minFreq = 125;
-      const maxFreq = 8000;
-      
-      audiogramFreqs.forEach(freq => {
-        const logPos = Math.log2(freq / minFreq) / Math.log2(maxFreq / minFreq);
-        const x = padding + logPos * graphWidth;
-        const label = freq >= 1000 ? (freq / 1000) + 'k' : freq.toString();
-        ctx.fillText(label + ' Hz', x, height - padding + 20);
-      });
+    const numTicks = 5;
+    // X Labels
+    if (scale === "audiogram") {
+      const minLog = Math.log10(20);
+      const maxLog = Math.log10(Math.max(8000, signalMaxFreq));
+      const logRange = maxLog - minLog;
+      for (let i = 0; i <= numTicks; i++) {
+        const t = i / numTicks;
+        const x = padding + t * graphWidth;
+        const freqVal = Math.pow(10, minLog + t * logRange);
+        const label =
+          freqVal >= 1000
+            ? (freqVal / 1000).toFixed(1) + "k"
+            : freqVal.toFixed(0);
+        ctx.fillText(label + " Hz", x, height - padding + 20);
+      }
     } else {
-      // Linear scale
-      for (let i = 0; i <= 5; i++) {
-        const x = padding + (graphWidth / 5) * i;
-        const freqIdx = Math.floor((i / 5) * (frequencies_trimmed.length - 1));
-        const freq = frequencies_trimmed[freqIdx] || 0;
-        const label = freq >= 1000 ? (freq / 1000).toFixed(1) + 'k' : freq.toFixed(0);
-        ctx.fillText(label + ' Hz', x, height - padding + 20);
+      for (let i = 0; i <= numTicks; i++) {
+        const t = i / numTicks;
+        const x = padding + t * graphWidth;
+        const freqVal = t * signalMaxFreq;
+        const label =
+          freqVal >= 1000
+            ? (freqVal / 1000).toFixed(1) + "k"
+            : freqVal.toFixed(0);
+        ctx.fillText(label + " Hz", x, height - padding + 20);
       }
     }
 
-    // Y-axis labels (magnitude)
-    ctx.textAlign = 'right';
+    // Y Labels
+    ctx.textAlign = "right";
     for (let i = 0; i <= 5; i++) {
       const y = padding + (graphHeight / 5) * i;
-      const mag = (maxMagnitude - (maxMagnitude / 5) * i).toFixed(1);
-      ctx.fillText(mag, padding - 10, y + 4);
+      let label;
+      if (scale === "audiogram") {
+        const dbVal = -(i / 5) * 100;
+        label = dbVal.toFixed(0) + " dB";
+      } else {
+        label = (maxLinearMag * (1 - i / 5)).toFixed(2);
+      }
+      ctx.fillText(label, padding - 10, y + 4);
     }
-
-    // Scale indicator
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#7dd3fc';
-    ctx.font = 'bold 12px Arial';
-    ctx.fillText(`Scale: ${scale === 'audiogram' ? 'Audiogram (Log)' : 'Linear'}`, padding, padding - 10);
   };
 
   return (
-    <div className="fourier-graph" style={{ position: 'relative' }}>
+    <div className="fourier-graph" style={{ position: "relative" }}>
       <h3 className="fourier-graph-title">{title}</h3>
-      <div style={{ position: 'relative' }}>
+      <div style={{ position: "relative" }}>
         <canvas
           ref={canvasRef}
           width={900}
@@ -252,47 +500,29 @@ function FourierGraph({ fourierData, scale = 'linear', title = 'Fourier Transfor
           className="fourier-graph-canvas"
         />
         {isLoading && (
-          <div style={{ 
-            color: '#94a3b8', 
-            padding: '20px', 
-            textAlign: 'center',
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            pointerEvents: 'none'
-          }}>
+          <div
+            style={{
+              color: "#94a3b8",
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+            }}
+          >
             Loading...
           </div>
         )}
         {error && (
-          <div style={{ 
-            color: '#ef4444', 
-            padding: '20px', 
-            textAlign: 'center',
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            pointerEvents: 'none',
-            fontSize: '14px',
-            maxWidth: '800px'
-          }}>
+          <div
+            style={{
+              color: "#ef4444",
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+            }}
+          >
             Error: {error}
-          </div>
-        )}
-        {!fourierData && !isLoading && !error && (
-          <div style={{ 
-            color: '#94a3b8', 
-            padding: '20px', 
-            textAlign: 'center',
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            pointerEvents: 'none'
-          }}>
-            No data available
           </div>
         )}
       </div>

@@ -34,31 +34,30 @@
 //   const [modeConfigs, setModeConfigs] = useState(null);
 //   const [isLoadingModes, setIsLoadingModes] = useState(true);
 
-//   // Signal states
+//   // Signals
 //   const [inputSignal, setInputSignal] = useState(null);
 //   const [outputSignal, setOutputSignal] = useState(null);
-//   const [apiSignal, setApiSignal] = useState(null);
+//   const [apiSignal, setApiSignal] = useState(null); // Stores the original signal for processing
 //   const [aiModelSignal, setAiModelSignal] = useState(null);
 
-//   // NEW: State for Fast Preview Spectrogram
+//   // PREVIEW DATA (Spectrogram Only)
 //   const [previewSpectrogramData, setPreviewSpectrogramData] = useState(null);
 
-//   // Fourier data states
+//   // Fourier Data
 //   const [inputFourierData, setInputFourierData] = useState(null);
 //   const [outputFourierData, setOutputFourierData] = useState(null);
 //   const [aiModelFourierData, setAiModelFourierData] = useState(null);
 
-//   // UI states - PLAYBACK CONTROL
+//   // Playback & View
 //   const [isPlaying, setIsPlaying] = useState(false);
 //   const [isPaused, setIsPaused] = useState(false);
 //   const [currentTime, setCurrentTime] = useState(0);
 //   const [playbackSpeed, setPlaybackSpeed] = useState(1);
 //   const [zoom, setZoom] = useState(1);
 //   const [pan, setPan] = useState(0);
-
-//   // Tracks if we are playing the "Secondary" signal
 //   const [isPlayingSecondary, setIsPlayingSecondary] = useState(false);
 
+//   // UI Toggles & Data
 //   const [isAIMode, setIsAIMode] = useState(false);
 //   const [aiStems, setAiStems] = useState(null);
 //   const [showSpectrograms, setShowSpectrograms] = useState(true);
@@ -84,43 +83,38 @@
 //   const isStoppedManuallyRef = useRef(false);
 //   const lastPreviewTimeRef = useRef(0);
 
-//   // === HELPER FUNCTIONS ===
+//   // --- Helpers ---
 //   const showToast = (message, type = "success") => {
 //     setToast({ message, type, visible: true });
 //     setTimeout(() => setToast((prev) => ({ ...prev, visible: false })), 3000);
 //   };
-
 //   const isAIModeEnabled = currentMode === "musical" || currentMode === "human";
-
 //   const allSlidersAtUnity = useCallback(() => {
 //     if (!sliders || sliders.length === 0) return true;
 //     const eqSliders = sliders.filter((s) => !s.isVoice);
 //     return eqSliders.every((slider) => Math.abs(slider.value - 1.0) < 0.0001);
 //   }, [sliders]);
+//   const canAddCustomSliders = () =>
+//     modeConfigs &&
+//     modeConfigs[currentMode] &&
+//     allowsCustomSliders(modeConfigs[currentMode]);
 
-//   const canAddCustomSliders = () => {
-//     if (!modeConfigs || !modeConfigs[currentMode]) return false;
-//     return allowsCustomSliders(modeConfigs[currentMode]);
-//   };
-
-//   // === SIGNAL SELECTION ===
-//   const getPrimarySignal = useCallback(() => {
-//     if (comparisonMode === "equalizer_vs_ai") {
-//       return allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
-//     }
-//     return inputSignal;
-//   }, [comparisonMode, inputSignal, outputSignal, allSlidersAtUnity]);
-
+//   // --- Signal Getters ---
+//   const getPrimarySignal = useCallback(
+//     () =>
+//       comparisonMode === "equalizer_vs_ai"
+//         ? allSlidersAtUnity() && inputSignal
+//           ? inputSignal
+//           : outputSignal
+//         : inputSignal,
+//     [comparisonMode, inputSignal, outputSignal, allSlidersAtUnity]
+//   );
 //   const getSecondarySignal = useCallback(() => {
-//     if (comparisonMode === "ai") {
-//       return aiModelSignal;
-//     } else if (comparisonMode === "slider") {
+//     if (comparisonMode === "ai") return aiModelSignal;
+//     if (comparisonMode === "slider")
 //       return allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
-//     } else if (comparisonMode === "equalizer_vs_ai") {
-//       return aiModelSignal;
-//     } else {
-//       return outputSignal;
-//     }
+//     if (comparisonMode === "equalizer_vs_ai") return aiModelSignal;
+//     return outputSignal;
 //   }, [
 //     comparisonMode,
 //     inputSignal,
@@ -128,73 +122,57 @@
 //     aiModelSignal,
 //     allSlidersAtUnity,
 //   ]);
-
 //   const getSignalByType = (type) => {
-//     if (comparisonMode === "equalizer_vs_ai") {
+//     if (comparisonMode === "equalizer_vs_ai")
 //       return type === "input"
 //         ? allSlidersAtUnity() && inputSignal
 //           ? inputSignal
 //           : outputSignal
 //         : aiModelSignal;
-//     }
-
-//     if (comparisonMode === "ai") {
+//     if (comparisonMode === "ai")
 //       return type === "input" ? inputSignal : aiModelSignal;
-//     }
-
-//     if (comparisonMode === "slider") {
+//     if (comparisonMode === "slider")
 //       return type === "input"
 //         ? inputSignal
 //         : allSlidersAtUnity() && inputSignal
 //         ? inputSignal
 //         : outputSignal;
-//     }
-
 //     return type === "input" ? inputSignal : outputSignal;
 //   };
-
 //   const getTitleByType = (type, isFFT = false) => {
 //     const suffix = isFFT ? " FFT" : " Signal";
 //     const aiSuffix = hasAIStems ? " Stem Mix" : " Output";
-
-//     if (comparisonMode === "equalizer_vs_ai") {
+//     if (comparisonMode === "equalizer_vs_ai")
 //       return type === "input" ? `Equalizer${suffix}` : `AI Model${suffix}`;
-//     }
-//     if (comparisonMode === "ai") {
+//     if (comparisonMode === "ai")
 //       return type === "input"
 //         ? `Input${suffix} (Original)`
 //         : `AI Model${suffix}`;
-//     }
-//     if (comparisonMode === "slider") {
+//     if (comparisonMode === "slider")
 //       return type === "input"
 //         ? `Input${suffix} (Original)`
 //         : `Equalizer${suffix}`;
-//     }
 //     return type === "input"
 //       ? `Input${suffix} (Original)`
 //       : hasAIStems
 //       ? `AI${aiSuffix}${suffix}`
 //       : `Equalizer${suffix}`;
 //   };
-
 //   const getFourierDataByType = (type) => {
-//     if (comparisonMode === "equalizer_vs_ai") {
+//     if (comparisonMode === "equalizer_vs_ai")
 //       return type === "input" ? outputFourierData : aiModelFourierData;
-//     }
-//     if (comparisonMode === "ai") {
+//     if (comparisonMode === "ai")
 //       return type === "input" ? inputFourierData : aiModelFourierData;
-//     }
-//     if (comparisonMode === "slider") {
+//     if (comparisonMode === "slider")
 //       return type === "input" ? inputFourierData : outputFourierData;
-//     }
 //     return type === "input" ? inputFourierData : outputFourierData;
 //   };
 
-//   // === CORE PROCESSING ===
-//   // Added silent flag to prevent loading flash on FFT too
+//   // --- Compute FFT (Optimized with Silent Mode) ---
 //   const computeFourierTransform = async (signal, type, silent = false) => {
 //     if (!signal || !signal.data || signal.data.length === 0) return;
 
+//     // Only show spinner if NOT silent
 //     if (!silent) setIsLoadingFFT(true);
 //     setFftError(null);
 
@@ -205,25 +183,23 @@
 //         fftScale
 //       );
 //       const result = response.data;
-
 //       if (type === "input") setInputFourierData(result);
 //       else if (type === "output") setOutputFourierData(result);
 //       else if (type === "ai") setAiModelFourierData(result);
 
 //       setIsLoadingFFT(false);
-//       setFftError(null);
 //     } catch (error) {
 //       setIsLoadingFFT(false);
 //       setFftError(error.message);
 //     }
 //   };
 
-//   // === MODIFIED APPLY EQUALIZATION ===
+//   // --- Apply Equalization (Core Logic) ---
 //   const applyEqualization = useCallback(
 //     async (isPreview = false) => {
 //       if (!inputSignal || !apiSignal || isProcessingRef.current) return;
 
-//       // Don't lock processing for previews (allows interruption)
+//       // Don't lock processing for previews
 //       if (!isPreview) isProcessingRef.current = true;
 
 //       try {
@@ -234,18 +210,16 @@
 //           apiSignal.sampleRate,
 //           eqSliders,
 //           currentMode,
-//           isPreview
+//           isPreview // true = fast spectrogram, false = full audio
 //         );
 
 //         if (isPreview) {
-//           // === FAST PREVIEW ===
-//           // We received lightweight spectrogram data
+//           // PREVIEW MODE: Update ONLY the spectrogram graph immediately
 //           if (response.data.spectrogram) {
 //             setPreviewSpectrogramData(response.data.spectrogram);
 //           }
 //         } else {
-//           // === FULL UPDATE ===
-//           // We received the heavy audio data
+//           // FULL MODE: Update the Audio Signal
 //           const result = response.data;
 //           const newOutputSignal = {
 //             data: result.outputSignal,
@@ -255,15 +229,14 @@
 
 //           setOutputSignal(newOutputSignal);
 
-//           // CRITICAL FIX: DO NOT clear preview data.
-//           // Keep showing the fast graph while the audio swaps.
-//           // setPreviewSpectrogramData(null);
+//           // CRITICAL FIX: DO NOT setPreviewSpectrogramData(null) here.
+//           // Letting the preview data persist prevents the "Loading..." flash/glitch
 
+//           // Update FFT silently
 //           if (fftTimeoutRef.current) clearTimeout(fftTimeoutRef.current);
 //           fftTimeoutRef.current = setTimeout(() => {
-//             // Silent update for Fourier (no spinner)
-//             computeFourierTransform(newOutputSignal, "output", true);
-//           }, 200);
+//             computeFourierTransform(newOutputSignal, "output", true); // silent=true
+//           }, 100);
 //         }
 //       } catch (error) {
 //         if (!isPreview) showToast("❌ Equalization failed", "error");
@@ -274,10 +247,10 @@
 //     [inputSignal, apiSignal, currentMode]
 //   );
 
+//   // --- Apply AI Mixing ---
 //   const applyAIMixing = useCallback(async () => {
 //     if (!inputSignal || !aiStems || isProcessingRef.current) return;
 //     isProcessingRef.current = true;
-
 //     try {
 //       const stemsWithGains = {};
 //       slidersRef.current.forEach((slider) => {
@@ -289,13 +262,11 @@
 //           };
 //         }
 //       });
-
 //       const response = await apiService.mixMusic(
 //         stemsWithGains,
 //         inputSignal.sampleRate
 //       );
 //       const result = response.data;
-
 //       const newOutputSignal = {
 //         data: result.mixedSignal,
 //         sampleRate: result.sampleRate,
@@ -308,8 +279,8 @@
 
 //       if (fftTimeoutRef.current) clearTimeout(fftTimeoutRef.current);
 //       fftTimeoutRef.current = setTimeout(() => {
-//         computeFourierTransform(newOutputSignal, "output");
-//         computeFourierTransform(newOutputSignal, "ai");
+//         computeFourierTransform(newOutputSignal, "output", true);
+//         computeFourierTransform(newOutputSignal, "ai", true);
 //       }, 200);
 //     } catch (error) {
 //       showToast("❌ AI mixing failed", "error");
@@ -318,83 +289,174 @@
 //     }
 //   }, [inputSignal, aiStems]);
 
-//   // === AUDIO PLAYBACK ENGINE ===
-//   useEffect(() => {
-//     if (!isPlaying || !inputSignal || !audioContextRef.current) return;
+//   // --- Slider Handler ---
+//   const handleSliderChange = (sliderId, newValue) => {
+//     const updatedSliders = sliders.map((slider) =>
+//       slider.id === sliderId ? { ...slider, value: newValue } : slider
+//     );
+//     setSliders(updatedSliders);
+//     slidersRef.current = updatedSliders;
 
-//     const initialTime = currentTime;
-//     const startTime = audioContextRef.current.currentTime;
+//     if (inputSignal && apiSignal) {
+//       const now = Date.now();
 
-//     const animate = () => {
-//       if (!audioContextRef.current || !isPlaying) return;
+//       // 1. FAST PREVIEW (Throttled 50ms)
+//       if (!(isAIMode && aiStems && currentMode !== "musical")) {
+//         if (now - lastPreviewTimeRef.current > 50) {
+//           applyEqualization(true); // isPreview = true
+//           lastPreviewTimeRef.current = now;
+//         }
+//       }
 
-//       const now = audioContextRef.current.currentTime;
-//       const timeElapsed = now - startTime;
-//       const newTime = initialTime + timeElapsed * playbackSpeed;
+//       // 2. FULL UPDATE (Debounced 300ms)
+//       if (equalizationTimeoutRef.current)
+//         clearTimeout(equalizationTimeoutRef.current);
 
-//       if (newTime <= inputSignal.duration) {
-//         setCurrentTime(newTime);
-//         animationFrameRef.current = requestAnimationFrame(animate);
-//       } else {
-//         isStoppedManuallyRef.current = true;
+//       equalizationTimeoutRef.current = setTimeout(() => {
+//         const changedSlider = updatedSliders.find((s) => s.id === sliderId);
 
-//         if (audioSourceRef.current) {
-//           try {
-//             audioSourceRef.current.stop();
-//           } catch (e) {}
-//           audioSourceRef.current = null;
+//         if (currentMode === "musical" && hasAIStems && aiModelRef.current) {
+//           aiModelRef.current.remixStems();
+//         }
+//         if (changedSlider && changedSlider.isVoice && aiModelRef.current) {
+//           const voiceGains = {};
+//           updatedSliders.forEach((s) => {
+//             if (s.isVoice && s.voiceKey) voiceGains[s.voiceKey] = s.value;
+//           });
+//           aiModelRef.current.remixVoices(voiceGains);
+//         } else if (isAIMode && aiStems && currentMode !== "musical") {
+//           applyAIMixing();
 //         }
 
+//         if (!(isAIMode && aiStems && currentMode !== "musical")) {
+//           applyEqualization(false); // isPreview = false
+//         }
+//       }, 300);
+//     }
+//   };
+
+//   // --- Mode Change ---
+//   const handleModeChange = async (e) => {
+//     const newMode = e.target.value;
+//     setCurrentMode(newMode);
+//     try {
+//       const savedSettings = loadSettings(newMode);
+//       if (savedSettings && savedSettings.sliders) {
+//         setSliders(savedSettings.sliders);
+//         slidersRef.current = savedSettings.sliders;
+//       } else if (modeConfigs && modeConfigs[newMode]) {
+//         setSliders(modeConfigs[newMode].sliders);
+//         slidersRef.current = modeConfigs[newMode].sliders;
+//       } else {
+//         const config = await getModeConfig(newMode);
+//         setSliders(config.sliders);
+//         slidersRef.current = config.sliders;
+//       }
+//       setAiModelSignal(null);
+//       setAiModelFourierData(null);
+//       setComparisonMode(null);
+//       setShowAIGraphs(false);
+//       setHasAIStems(false);
+//       setPreviewSpectrogramData(null); // CLEAR PREVIEW HERE
+
+//       if (inputSignal && apiSignal)
+//         setTimeout(() => applyEqualization(false), 100);
+//     } catch (error) {
+//       const fallback = getFallbackConfig(newMode);
+//       setSliders(fallback.sliders);
+//       slidersRef.current = fallback.sliders;
+//     }
+//   };
+
+//   const handleAIModelResult = (aiSignal) => {
+//     setAiModelSignal(aiSignal);
+//     setShowAIGraphs(true);
+//     setHasAIStems(true);
+//     setComparisonMode(null);
+//     if (aiSignal.fourierData) setAiModelFourierData(aiSignal.fourierData);
+//     else computeFourierTransform(aiSignal, "ai");
+//   };
+
+//   // --- File Upload ---
+//   const handleFileUpload = (e) => {
+//     const file = e.target.files[0];
+//     if (!file) return;
+//     const reader = new FileReader();
+//     reader.onload = async (event) => {
+//       try {
+//         if (!audioContextRef.current)
+//           audioContextRef.current = new (window.AudioContext ||
+//             window.webkitAudioContext)();
+//         const arrayBuffer = event.target.result;
+//         const audioBuffer = await audioContextRef.current.decodeAudioData(
+//           arrayBuffer
+//         );
+//         const channelData = audioBuffer.getChannelData(0);
+//         const originalSignal = {
+//           data: Array.from(channelData),
+//           sampleRate: audioBuffer.sampleRate,
+//           duration: audioBuffer.duration,
+//         };
+
+//         setInputSignal(originalSignal);
+//         setOutputSignal(originalSignal);
+//         setApiSignal(originalSignal);
+//         setAiModelSignal(null);
+//         setAiModelFourierData(null);
+//         setComparisonMode(null);
+//         setShowAIGraphs(false);
+//         setHasAIStems(false);
+//         setPreviewSpectrogramData(null); // CLEAR PREVIEW HERE
+
+//         setSliders((prev) => prev.filter((slider) => !slider.isVoice));
+//         setCurrentTime(0);
 //         setIsPlaying(false);
 //         setIsPaused(false);
-//         setCurrentTime(0);
+//         setZoom(1);
+//         setPan(0);
+//         setPlaybackSpeed(1);
+//         setIsPlayingSecondary(false);
+
+//         computeFourierTransform(originalSignal, "input");
+//         computeFourierTransform(originalSignal, "output");
+//         showToast("✅ Audio file loaded successfully", "success");
+//       } catch (error) {
+//         showToast("❌ Error loading file.", "error");
 //       }
 //     };
+//     reader.readAsArrayBuffer(file);
+//   };
 
-//     animationFrameRef.current = requestAnimationFrame(animate);
+//   const handleVoiceGainsUpdate = (voiceSliders) => {
+//     setSliders((prev) => {
+//       const nonVoiceSliders = prev.filter((slider) => !slider.isVoice);
+//       return [...nonVoiceSliders, ...voiceSliders];
+//     });
+//   };
 
-//     return () => {
-//       if (animationFrameRef.current) {
-//         cancelAnimationFrame(animationFrameRef.current);
-//       }
-//     };
-//   }, [isPlaying, inputSignal, playbackSpeed]);
-
-//   // Play audio from a specific time
+//   // --- Audio Playback Logic ---
 //   const playAudioFromTime = useCallback(
 //     (startTime, useSecondarySignal = false) => {
 //       let signalToPlay;
 //       if (useSecondarySignal) {
-//         if (comparisonMode === "ai") {
+//         if (comparisonMode === "ai") signalToPlay = aiModelSignal;
+//         else if (comparisonMode === "slider")
+//           signalToPlay =
+//             allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
+//         else if (comparisonMode === "equalizer_vs_ai")
 //           signalToPlay = aiModelSignal;
-//         } else if (comparisonMode === "slider") {
-//           const unity = sliders
-//             .filter((s) => !s.isVoice)
-//             .every((slider) => Math.abs(slider.value - 1.0) < 0.0001);
-//           signalToPlay = unity && inputSignal ? inputSignal : outputSignal;
-//         } else if (comparisonMode === "equalizer_vs_ai") {
-//           signalToPlay = aiModelSignal;
-//         } else {
-//           signalToPlay = outputSignal;
-//         }
+//         else signalToPlay = outputSignal;
 //       } else {
-//         if (comparisonMode === "equalizer_vs_ai") {
-//           const unity = sliders
-//             .filter((s) => !s.isVoice)
-//             .every((slider) => Math.abs(slider.value - 1.0) < 0.0001);
-//           signalToPlay = unity && inputSignal ? inputSignal : outputSignal;
-//         } else {
-//           signalToPlay = inputSignal;
-//         }
+//         if (comparisonMode === "equalizer_vs_ai")
+//           signalToPlay =
+//             allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
+//         else signalToPlay = inputSignal;
 //       }
 
 //       if (!signalToPlay || !signalToPlay.data) return;
-
-//       if (!audioContextRef.current) {
+//       if (!audioContextRef.current)
 //         audioContextRef.current = new (window.AudioContext ||
 //           window.webkitAudioContext)();
-//       }
-
 //       const audioContext = audioContextRef.current;
 
 //       if (audioSourceRef.current) {
@@ -410,6 +472,7 @@
 //         signalToPlay.sampleRate
 //       );
 //       const channelData = audioBuffer.getChannelData(0);
+//       // Safe copy
 //       for (let i = 0; i < signalToPlay.data.length; i++) {
 //         channelData[i] = signalToPlay.data[i];
 //       }
@@ -446,6 +509,7 @@
 //       outputSignal,
 //       aiModelSignal,
 //       sliders,
+//       allSlidersAtUnity,
 //     ]
 //   );
 
@@ -455,11 +519,43 @@
 //     },
 //     [currentTime, playAudioFromTime]
 //   );
-
+//   const handlePlay = () => playAudio(isPlayingSecondary);
+//   const handlePause = () => {
+//     if (isPlaying) {
+//       isStoppedManuallyRef.current = true;
+//       if (audioSourceRef.current) {
+//         try {
+//           audioSourceRef.current.stop();
+//         } catch (e) {}
+//         audioSourceRef.current = null;
+//       }
+//       if (animationFrameRef.current) {
+//         cancelAnimationFrame(animationFrameRef.current);
+//         animationFrameRef.current = null;
+//       }
+//       setIsPlaying(false);
+//       setIsPaused(true);
+//     }
+//   };
+//   const handleStop = () => {
+//     isStoppedManuallyRef.current = true;
+//     if (audioSourceRef.current) {
+//       try {
+//         audioSourceRef.current.stop();
+//       } catch (e) {}
+//       audioSourceRef.current = null;
+//     }
+//     if (animationFrameRef.current) {
+//       cancelAnimationFrame(animationFrameRef.current);
+//       animationFrameRef.current = null;
+//     }
+//     setIsPlaying(false);
+//     setIsPaused(false);
+//     setCurrentTime(0);
+//   };
 //   const handleSeek = useCallback(
 //     (seekTime) => {
 //       if (!inputSignal) return;
-
 //       if (isPlaying) {
 //         if (audioSourceRef.current) {
 //           isStoppedManuallyRef.current = true;
@@ -468,12 +564,10 @@
 //           } catch (e) {}
 //           audioSourceRef.current = null;
 //         }
-
 //         if (animationFrameRef.current) {
 //           cancelAnimationFrame(animationFrameRef.current);
 //           animationFrameRef.current = null;
 //         }
-
 //         setTimeout(() => {
 //           playAudioFromTime(seekTime, isPlayingSecondary);
 //         }, 10);
@@ -485,238 +579,65 @@
 //     [inputSignal, isPlaying, isPlayingSecondary, playAudioFromTime]
 //   );
 
-//   const handlePlay = () => playAudio(isPlayingSecondary);
-
-//   const handlePause = () => {
-//     if (isPlaying) {
-//       isStoppedManuallyRef.current = true;
-
-//       if (audioSourceRef.current) {
-//         try {
-//           audioSourceRef.current.stop();
-//         } catch (e) {}
-//         audioSourceRef.current = null;
-//       }
-
-//       if (animationFrameRef.current) {
-//         cancelAnimationFrame(animationFrameRef.current);
-//         animationFrameRef.current = null;
-//       }
-
-//       setIsPlaying(false);
-//       setIsPaused(true);
-//     }
-//   };
-
-//   const handleStop = () => {
-//     isStoppedManuallyRef.current = true;
-
-//     if (audioSourceRef.current) {
-//       try {
-//         audioSourceRef.current.stop();
-//       } catch (e) {}
-//       audioSourceRef.current = null;
-//     }
-
-//     if (animationFrameRef.current) {
-//       cancelAnimationFrame(animationFrameRef.current);
-//       animationFrameRef.current = null;
-//     }
-
-//     setIsPlaying(false);
-//     setIsPaused(false);
-//     setCurrentTime(0);
-//   };
-
 //   const handleSpeedChange = (e) => {
 //     const newSpeed = parseFloat(e.target.value);
 //     setPlaybackSpeed(newSpeed);
-//     if (audioSourceRef.current && isPlaying) {
+//     if (audioSourceRef.current && isPlaying)
 //       audioSourceRef.current.playbackRate.value = newSpeed;
-//     }
 //   };
-
 //   const handleZoomIn = () => setZoom((prev) => Math.min(100, prev * 1.2));
 //   const handleZoomOut = () => setZoom((prev) => Math.max(1, prev / 1.2));
-
 //   const handleResetView = () => {
 //     setZoom(1);
 //     setPan(0);
 //   };
-
 //   const handleToggleAudio = () => {
 //     const newIsSecondary = !isPlayingSecondary;
-//     if (isPlaying) {
-//       playAudioFromTime(currentTime, newIsSecondary);
-//     } else {
-//       setIsPlayingSecondary(newIsSecondary);
-//     }
+//     if (isPlaying) playAudioFromTime(currentTime, newIsSecondary);
+//     else setIsPlayingSecondary(newIsSecondary);
 //   };
 
-//   const handleFileUpload = (e) => {
-//     const file = e.target.files[0];
-//     if (!file) return;
-//     const reader = new FileReader();
-//     reader.onload = async (event) => {
-//       try {
-//         if (!audioContextRef.current)
-//           audioContextRef.current = new (window.AudioContext ||
-//             window.webkitAudioContext)();
-//         const arrayBuffer = event.target.result;
-//         const audioBuffer = await audioContextRef.current.decodeAudioData(
-//           arrayBuffer
-//         );
-//         const channelData = audioBuffer.getChannelData(0);
-//         const originalSignal = {
-//           data: Array.from(channelData),
-//           sampleRate: audioBuffer.sampleRate,
-//           duration: audioBuffer.duration,
-//         };
-
-//         setInputSignal(originalSignal);
-//         setOutputSignal(originalSignal);
-//         setApiSignal(originalSignal);
-//         setAiModelSignal(null);
-//         setAiModelFourierData(null);
-//         setComparisonMode(null);
-//         setShowAIGraphs(false);
-//         setHasAIStems(false);
-//         setPreviewSpectrogramData(null);
-//         setSliders((prev) => prev.filter((slider) => !slider.isVoice));
-
-//         setCurrentTime(0);
-//         setIsPlaying(false);
-//         setIsPaused(false);
-//         setZoom(1);
-//         setPan(0);
-//         setPlaybackSpeed(1);
-//         setIsPlayingSecondary(false);
-
-//         computeFourierTransform(originalSignal, "input");
-//         computeFourierTransform(originalSignal, "output");
-//         showToast("✅ Audio file loaded successfully", "success");
-//       } catch (error) {
-//         showToast("❌ Error loading file.", "error");
+//   useEffect(() => {
+//     if (!isPlaying || !inputSignal || !audioContextRef.current) return;
+//     const initialTime = currentTime;
+//     const startTime = audioContextRef.current.currentTime;
+//     const animate = () => {
+//       if (!audioContextRef.current || !isPlaying) return;
+//       const now = audioContextRef.current.currentTime;
+//       const timeElapsed = now - startTime;
+//       const newTime = initialTime + timeElapsed * playbackSpeed;
+//       if (newTime <= inputSignal.duration) {
+//         setCurrentTime(newTime);
+//         animationFrameRef.current = requestAnimationFrame(animate);
+//       } else {
+//         handleStop();
 //       }
 //     };
-//     reader.readAsArrayBuffer(file);
-//   };
+//     animationFrameRef.current = requestAnimationFrame(animate);
+//     return () => {
+//       if (animationFrameRef.current)
+//         cancelAnimationFrame(animationFrameRef.current);
+//     };
+//   }, [isPlaying, inputSignal, playbackSpeed]);
 
-//   const handleVoiceGainsUpdate = (voiceSliders) => {
-//     setSliders((prev) => {
-//       const nonVoiceSliders = prev.filter((slider) => !slider.isVoice);
-//       return [...nonVoiceSliders, ...voiceSliders];
-//     });
-//   };
-
-//   // === SLIDER HANDLER ===
-//   const handleSliderChange = (sliderId, newValue) => {
-//     const updatedSliders = sliders.map((slider) =>
-//       slider.id === sliderId ? { ...slider, value: newValue } : slider
-//     );
-//     setSliders(updatedSliders);
-//     slidersRef.current = updatedSliders;
-
-//     if (inputSignal && apiSignal) {
-//       // 1. Trigger PREVIEW immediately (Throttled)
-//       const now = Date.now();
-//       if (now - lastPreviewTimeRef.current > 50) {
-//         if (isAIMode && aiStems && currentMode !== "musical") {
-//           // AI Mode - no preview needed
-//         } else {
-//           // Regular EQ mode -> Fetch lightweight Preview
-//           applyEqualization(true);
-//           lastPreviewTimeRef.current = now;
-//         }
-//       }
-
-//       // 2. Trigger FULL UPDATE (Debounced)
-//       if (equalizationTimeoutRef.current)
-//         clearTimeout(equalizationTimeoutRef.current);
-
-//       equalizationTimeoutRef.current = setTimeout(() => {
-//         const changedSlider = updatedSliders.find((s) => s.id === sliderId);
-
-//         if (currentMode === "musical" && hasAIStems && aiModelRef.current) {
-//           aiModelRef.current.remixStems();
-//         }
-
-//         if (changedSlider && changedSlider.isVoice && aiModelRef.current) {
-//           const voiceGains = {};
-//           updatedSliders.forEach((s) => {
-//             if (s.isVoice && s.voiceKey) voiceGains[s.voiceKey] = s.value;
-//           });
-//           aiModelRef.current.remixVoices(voiceGains);
-//         } else if (isAIMode && aiStems && currentMode !== "musical") {
-//           applyAIMixing();
-//         }
-
-//         if (!(isAIMode && aiStems && currentMode !== "musical")) {
-//           // Commit Full Audio Update
-//           applyEqualization(false);
-//         }
-//       }, 300); // 300ms debounce
-//     }
-//   };
-
-//   const handleModeChange = async (e) => {
-//     const newMode = e.target.value;
-//     setCurrentMode(newMode);
-
-//     try {
-//       const savedSettings = loadSettings(newMode);
-//       if (savedSettings && savedSettings.sliders) {
-//         setSliders(savedSettings.sliders);
-//         slidersRef.current = savedSettings.sliders;
-//       } else if (modeConfigs && modeConfigs[newMode]) {
-//         setSliders(modeConfigs[newMode].sliders);
-//         slidersRef.current = modeConfigs[newMode].sliders;
-//       } else {
-//         const config = await getModeConfig(newMode);
-//         setSliders(config.sliders);
-//         slidersRef.current = config.sliders;
-//       }
-
-//       setAiModelSignal(null);
-//       setAiModelFourierData(null);
-//       setComparisonMode(null);
-//       setShowAIGraphs(false);
-//       setHasAIStems(false);
-//       setPreviewSpectrogramData(null);
-
-//       if (inputSignal && apiSignal)
-//         setTimeout(() => applyEqualization(false), 100);
-//     } catch (error) {
-//       const fallback = getFallbackConfig(newMode);
-//       setSliders(fallback.sliders);
-//       slidersRef.current = fallback.sliders;
-//     }
-//   };
-
-//   const handleAIModelResult = (aiSignal) => {
-//     setAiModelSignal(aiSignal);
-//     setShowAIGraphs(true);
-//     setHasAIStems(true);
-//     setComparisonMode(null);
-//     if (aiSignal.fourierData) setAiModelFourierData(aiSignal.fourierData);
-//     else computeFourierTransform(aiSignal, "ai");
-//   };
+//   useEffect(() => {
+//     if (apiSignal) computeFourierTransform(apiSignal, "input", true);
+//     // FIX: Use outputSignal to show changes in FFT
+//     if (outputSignal) computeFourierTransform(outputSignal, "output", true);
+//     if (aiModelSignal) computeFourierTransform(aiModelSignal, "ai", true);
+//   }, [fftScale]);
 
 //   useEffect(() => {
 //     const loadModeConfigs = async () => {
 //       setIsLoadingModes(true);
 //       try {
 //         const configs = await getAllModeConfigs();
-//         if (!configs) throw new Error("No mode configs");
 //         setModeConfigs(configs);
 //         if (configs[currentMode]) {
 //           setSliders(configs[currentMode].sliders);
 //           slidersRef.current = configs[currentMode].sliders;
 //         }
-//       } catch (error) {
-//         const fallback = getFallbackConfig(currentMode);
-//         setSliders(fallback.sliders);
-//         slidersRef.current = fallback.sliders;
+//       } catch (e) {
 //       } finally {
 //         setIsLoadingModes(false);
 //       }
@@ -727,18 +648,17 @@
 //   useEffect(() => {
 //     slidersRef.current = sliders;
 //   }, [sliders]);
-
 //   useEffect(() => {
 //     const saveTimeout = setTimeout(() => {
-//       if (sliders && sliders.length > 0) {
-//         const nonVoiceSliders = sliders.filter((slider) => !slider.isVoice);
-//         if (nonVoiceSliders.length > 0) {
-//           saveSettings(currentMode, nonVoiceSliders);
+//       if (sliders.length > 0) {
+//         const nonVoice = sliders.filter((s) => !s.isVoice);
+//         if (nonVoice.length > 0) {
+//           saveSettings(currentMode, nonVoice);
 //           if (backendSyncTimeoutRef.current)
 //             clearTimeout(backendSyncTimeoutRef.current);
 //           backendSyncTimeoutRef.current = setTimeout(async () => {
 //             try {
-//               await autoSyncSliders(currentMode, nonVoiceSliders);
+//               await autoSyncSliders(currentMode, nonVoice);
 //             } catch (e) {}
 //           }, 2000);
 //         }
@@ -750,19 +670,6 @@
 //         clearTimeout(backendSyncTimeoutRef.current);
 //     };
 //   }, [sliders, currentMode]);
-
-//   // === RE-FETCH FFT WHEN SCALE CHANGES ===
-//   useEffect(() => {
-//     if (apiSignal) computeFourierTransform(apiSignal, "input");
-
-//     // === CRITICAL BUG FIX ===
-//     // WAS: if (outputSignal && apiSignal) computeFourierTransform(apiSignal, "output");
-//     // NOW: computeFourierTransform(outputSignal, "output")
-//     // This ensures we fetch the TRANSFORMED signal's FFT, not the original one
-//     if (outputSignal) computeFourierTransform(outputSignal, "output");
-
-//     if (aiModelSignal) computeFourierTransform(aiModelSignal, "ai");
-//   }, [fftScale]); // Dependencies: Re-run when fftScale changes
 
 //   useEffect(() => {
 //     return () => {
@@ -783,7 +690,6 @@
 //       {toast.visible && (
 //         <div className={`toast toast-${toast.type}`}>{toast.message}</div>
 //       )}
-
 //       <AppHeader
 //         currentMode={currentMode}
 //         isLoadingModes={isLoadingModes}
@@ -793,61 +699,9 @@
 //         apiSignal={apiSignal}
 //         onModeChange={handleModeChange}
 //         onFileUpload={handleFileUpload}
-//         onReloadConfig={async () => {
-//           setIsLoadingModes(true);
-//           try {
-//             clearCache();
-//             const configs = await getAllModeConfigs(null, true);
-//             setModeConfigs(configs);
-//             if (configs[currentMode]) {
-//               const currentVoiceSliders = sliders.filter((s) => s.isVoice);
-//               const newBaseSliders = configs[currentMode].sliders;
-//               setSliders([...newBaseSliders, ...currentVoiceSliders]);
-//               slidersRef.current = [...newBaseSliders, ...currentVoiceSliders];
-//               if (inputSignal && apiSignal)
-//                 setTimeout(() => applyEqualization(false), 100);
-//             }
-//             showToast("✅ Reloaded", "success");
-//           } catch (e) {
-//             showToast("❌ Failed", "error");
-//           } finally {
-//             setIsLoadingModes(false);
-//           }
-//         }}
-//         onResetDefaults={async () => {
-//           clearCache();
-//           setIsLoadingModes(true);
-//           try {
-//             await apiService.resetModes();
-//             clearSettings(currentMode);
-//             const configs = await getAllModeConfigs(null, true);
-//             setModeConfigs(configs);
-//             if (configs[currentMode]) {
-//               const currentVoiceSliders = sliders.filter((s) => s.isVoice);
-//               const newBaseSliders = configs[currentMode].sliders;
-//               setSliders([...newBaseSliders, ...currentVoiceSliders]);
-//               slidersRef.current = [...newBaseSliders, ...currentVoiceSliders];
-//             }
-//             showToast("✅ Reset", "success");
-//             if (inputSignal && apiSignal)
-//               setTimeout(() => applyEqualization(false), 100);
-//           } catch (e) {
-//             showToast("❌ Reset Failed", "error");
-//           } finally {
-//             setIsLoadingModes(false);
-//           }
-//         }}
-//         onLoadSettings={(s) => {
-//           setCurrentMode(s.mode);
-//           const currentVoiceSliders = sliders.filter(
-//             (slider) => slider.isVoice
-//           );
-//           const combinedSliders = [...s.sliders, ...currentVoiceSliders];
-//           setSliders(combinedSliders);
-//           slidersRef.current = combinedSliders;
-//           if (inputSignal && apiSignal)
-//             setTimeout(() => applyEqualization(false), 100);
-//         }}
+//         onReloadConfig={() => {}}
+//         onResetDefaults={() => {}}
+//         onLoadSettings={() => {}}
 //         onToast={showToast}
 //       />
 
@@ -856,12 +710,7 @@
 //           onCreate={(newSlider) => {
 //             setSliders([...sliders, newSlider]);
 //             setShowSliderModal(false);
-//             if (equalizationTimeoutRef.current)
-//               clearTimeout(equalizationTimeoutRef.current);
-//             equalizationTimeoutRef.current = setTimeout(
-//               () => applyEqualization(false),
-//               100
-//             );
+//             setTimeout(() => applyEqualization(false), 100);
 //           }}
 //           onCancel={() => setShowSliderModal(false)}
 //         />
@@ -887,15 +736,9 @@
 //           <div className="sliders-header">
 //             <div className="sliders-title">
 //               <h3>
-//                 {modeConfigs?.[currentMode]?.icon || "⚙️"}{" "}
-//                 {modeConfigs?.[currentMode]?.name || "Unknown"} Equalizer
+//                 {modeConfigs?.[currentMode]?.icon}{" "}
+//                 {modeConfigs?.[currentMode]?.name} Equalizer
 //               </h3>
-//               {currentMode === "musical" && hasAIStems && (
-//                 <div className="ai-integration-badge">
-//                   <span className="ai-badge-icon">🤖</span>
-//                   <span>AI Stems Active</span>
-//                 </div>
-//               )}
 //             </div>
 //             {canAddCustomSliders() && !hasAIStems && (
 //               <button
@@ -906,7 +749,6 @@
 //               </button>
 //             )}
 //           </div>
-
 //           <div className="compact-sliders-grid">
 //             {sliders.map((slider) => (
 //               <EqualizerSlider
@@ -917,12 +759,7 @@
 //                   canAddCustomSliders() && !slider.isVoice
 //                     ? (id) => {
 //                         setSliders((prev) => prev.filter((s) => s.id !== id));
-//                         if (equalizationTimeoutRef.current)
-//                           clearTimeout(equalizationTimeoutRef.current);
-//                         equalizationTimeoutRef.current = setTimeout(
-//                           () => applyEqualization(false),
-//                           100
-//                         );
+//                         setTimeout(() => applyEqualization(false), 100);
 //                       }
 //                     : null
 //                 }
@@ -935,11 +772,6 @@
 //               />
 //             ))}
 //           </div>
-//           {hasAIStems && (
-//             <div className="ai-controls-info-compact">
-//               <span>🎛️ AI Stem Control Active</span>
-//             </div>
-//           )}
 //         </div>
 
 //         {inputSignal && (
@@ -955,7 +787,7 @@
 //             onZoomOut={handleZoomOut}
 //             onReset={handleResetView}
 //             currentTime={currentTime}
-//             duration={inputSignal?.duration || 0}
+//             duration={inputSignal.duration}
 //             onToggleAudio={handleToggleAudio}
 //             isPlayingOriginal={!isPlayingSecondary}
 //           />
@@ -975,7 +807,6 @@
 //                   onPanChange={setPan}
 //                   onZoomChange={setZoom}
 //                   onSeek={handleSeek}
-//                   isCineMode={true}
 //                 />
 //                 <SignalViewer
 //                   signal={getSignalByType("output")}
@@ -987,10 +818,8 @@
 //                   onPanChange={setPan}
 //                   onZoomChange={setZoom}
 //                   onSeek={handleSeek}
-//                   isCineMode={true}
 //                 />
 //               </div>
-
 //               <div className="spectrograms-container">
 //                 <div className="spectrogram-controls">
 //                   <h4>📈 Spectrograms</h4>
@@ -1000,10 +829,9 @@
 //                     }`}
 //                     onClick={() => setShowSpectrograms(!showSpectrograms)}
 //                   >
-//                     {showSpectrograms ? "👁️ Hide" : "👁 Show"}
+//                     {showSpectrograms ? "Hide" : "Show"}
 //                   </button>
 //                 </div>
-
 //                 {showSpectrograms && (
 //                   <div className="spectrograms-pair">
 //                     <Spectrogram
@@ -1766,9 +1594,68 @@ function MainPage() {
         apiSignal={apiSignal}
         onModeChange={handleModeChange}
         onFileUpload={handleFileUpload}
-        onReloadConfig={() => {}}
-        onResetDefaults={() => {}}
-        onLoadSettings={() => {}}
+        // === FIXED: RESTORED onReloadConfig LOGIC ===
+        onReloadConfig={async () => {
+          setIsLoadingModes(true);
+          try {
+            clearCache();
+            const configs = await getAllModeConfigs(null, true);
+            setModeConfigs(configs);
+            if (configs[currentMode]) {
+              const currentVoiceSliders = sliders.filter((s) => s.isVoice);
+              const newBaseSliders = configs[currentMode].sliders;
+              setSliders([...newBaseSliders, ...currentVoiceSliders]);
+              slidersRef.current = [...newBaseSliders, ...currentVoiceSliders];
+              if (inputSignal && apiSignal)
+                setTimeout(() => applyEqualization(false), 100);
+            }
+            showToast("✅ Reloaded", "success");
+          } catch (e) {
+            showToast("❌ Failed", "error");
+          } finally {
+            setIsLoadingModes(false);
+          }
+        }}
+        // === FIXED: RESTORED onResetDefaults LOGIC ===
+        onResetDefaults={async () => {
+          clearCache();
+          setIsLoadingModes(true);
+          try {
+            // 1. Tell backend to reset
+            await apiService.resetModes();
+            // 2. Clear local storage
+            clearSettings(currentMode);
+            // 3. Re-fetch clean config
+            const configs = await getAllModeConfigs(null, true);
+            setModeConfigs(configs);
+            if (configs[currentMode]) {
+              const currentVoiceSliders = sliders.filter((s) => s.isVoice);
+              const newBaseSliders = configs[currentMode].sliders;
+              setSliders([...newBaseSliders, ...currentVoiceSliders]);
+              slidersRef.current = [...newBaseSliders, ...currentVoiceSliders];
+            }
+            showToast("✅ Reset", "success");
+            // 4. Force a Full Equalization update (not preview) with new defaults
+            if (inputSignal && apiSignal)
+              setTimeout(() => applyEqualization(false), 100);
+          } catch (e) {
+            showToast("❌ Reset Failed", "error");
+          } finally {
+            setIsLoadingModes(false);
+          }
+        }}
+        // === FIXED: RESTORED onLoadSettings LOGIC ===
+        onLoadSettings={(s) => {
+          setCurrentMode(s.mode);
+          const currentVoiceSliders = sliders.filter(
+            (slider) => slider.isVoice
+          );
+          const combinedSliders = [...s.sliders, ...currentVoiceSliders];
+          setSliders(combinedSliders);
+          slidersRef.current = combinedSliders;
+          if (inputSignal && apiSignal)
+            setTimeout(() => applyEqualization(false), 100);
+        }}
         onToast={showToast}
       />
 

@@ -637,7 +637,6 @@ function MainPage() {
           setSliders(configs[currentMode].sliders);
           slidersRef.current = configs[currentMode].sliders;
         }
-      } catch (e) {
       } finally {
         setIsLoadingModes(false);
       }
@@ -726,6 +725,7 @@ function MainPage() {
           clearCache();
           setIsLoadingModes(true);
           try {
+            setPreviewSpectrogramData(null);
             // 1. Tell backend to reset
             await apiService.resetModes();
             // 2. Clear local storage
@@ -818,6 +818,7 @@ function MainPage() {
                   canAddCustomSliders() && !slider.isVoice
                     ? (id) => {
                         setSliders((prev) => prev.filter((s) => s.id !== id));
+                        setPreviewSpectrogramData(null);
                         setTimeout(() => applyEqualization(false), 100);
                       }
                     : null

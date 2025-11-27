@@ -355,6 +355,7 @@ function LinkedSignalViewers({
         duration={inputSignal?.duration || 0}
         onToggleAudio={handleToggleAudioSource}
         isPlayingOriginal={isPlayingOriginal}
+        comparisonMode={comparisonMode}
       />
 
       <div

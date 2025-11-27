@@ -82,8 +82,6 @@ function MainPage() {
   const animationFrameRef = useRef(null);
   const isStoppedManuallyRef = useRef(false);
   const lastPreviewTimeRef = useRef(0);
-  const playbackStartTimeRef = useRef(null); // Audio context time when playback started
-  const playbackInitialTimeRef = useRef(0); // Signal time we started from
 
   // --- Helpers ---
   const showToast = (message, type = "success") => {
@@ -199,11 +197,7 @@ function MainPage() {
   // --- Apply Equalization (Core Logic) ---
   const applyEqualization = useCallback(
     async (isPreview = false) => {
-      if (!inputSignal || !apiSignal) return;
-
-      // Only block if we're doing a full equalization and something is already processing
-      // Previews are fast and should always be allowed
-      if (!isPreview && isProcessingRef.current) return;
+      if (!inputSignal || !apiSignal || isProcessingRef.current) return;
 
       // Don't lock processing for previews
       if (!isPreview) isProcessingRef.current = true;
@@ -305,13 +299,10 @@ function MainPage() {
 
     if (inputSignal && apiSignal) {
       const now = Date.now();
-      const timeSinceLastPreview = now - lastPreviewTimeRef.current;
 
-      // 1. FAST PREVIEW (Throttled 50ms, but always trigger on first change)
+      // 1. FAST PREVIEW (Throttled 50ms)
       if (!(isAIMode && aiStems && currentMode !== "musical")) {
-        // Always trigger preview on first change (when lastPreviewTimeRef is 0 or time gap is large)
-        // or when enough time has passed since last preview
-        if (timeSinceLastPreview > 50 || lastPreviewTimeRef.current === 0) {
+        if (now - lastPreviewTimeRef.current > 50) {
           applyEqualization(true); // isPreview = true
           lastPreviewTimeRef.current = now;
         }
@@ -444,90 +435,83 @@ function MainPage() {
   };
 
   // --- Audio Playback Logic ---
-  // MainPage.jsx - Enhanced playAudioFromTime
-const playAudioFromTime = useCallback(
-  (startTime, useSecondarySignal = false) => {
-    let signalToPlay;
-    if (useSecondarySignal) {
-      if (comparisonMode === "ai") signalToPlay = aiModelSignal;
-      else if (comparisonMode === "slider")
-        signalToPlay =
-          allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
-      else if (comparisonMode === "equalizer_vs_ai")
-        signalToPlay = aiModelSignal;
-      else signalToPlay = outputSignal;
-    } else {
-      if (comparisonMode === "equalizer_vs_ai")
-        signalToPlay =
-          allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
-      else signalToPlay = inputSignal;
-    }
-
-    if (!signalToPlay || !signalToPlay.data) return;
-    if (!audioContextRef.current)
-      audioContextRef.current = new (window.AudioContext ||
-        window.webkitAudioContext)();
-    const audioContext = audioContextRef.current;
-
-    if (audioSourceRef.current) {
-      isStoppedManuallyRef.current = true;
-      try {
-        audioSourceRef.current.stop();
-      } catch (e) {}
-    }
-
-    const audioBuffer = audioContext.createBuffer(
-      1,
-      signalToPlay.data.length,
-      signalToPlay.sampleRate
-    );
-    const channelData = audioBuffer.getChannelData(0);
-    // Safe copy
-    for (let i = 0; i < signalToPlay.data.length; i++) {
-      channelData[i] = signalToPlay.data[i];
-    }
-
-    audioSourceRef.current = audioContext.createBufferSource();
-    audioSourceRef.current.buffer = audioBuffer;
-    audioSourceRef.current.playbackRate.value = playbackSpeed;
-    audioSourceRef.current.connect(audioContext.destination);
-
-    isStoppedManuallyRef.current = false;
-    audioSourceRef.current.start(0, startTime);
-
-    // Store playback start info for accurate position tracking
-    playbackStartTimeRef.current = audioContext.currentTime;
-    playbackInitialTimeRef.current = startTime;
-
-    // CRITICAL: DON'T reset currentTime here - let the animation loop handle it
-    // This prevents the visual jump when toggling
-    // setCurrentTime(startTime); // REMOVE THIS LINE
-
-    setIsPlaying(true);
-    setIsPaused(false);
-    setIsPlayingSecondary(useSecondarySignal);
-
-    audioSourceRef.current.onended = () => {
-      if (!isStoppedManuallyRef.current) {
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-          animationFrameRef.current = null;
-        }
-        setIsPlaying(false);
-        setIsPaused(false);
-        setCurrentTime(0);
+  const playAudioFromTime = useCallback(
+    (startTime, useSecondarySignal = false) => {
+      let signalToPlay;
+      if (useSecondarySignal) {
+        if (comparisonMode === "ai") signalToPlay = aiModelSignal;
+        else if (comparisonMode === "slider")
+          signalToPlay =
+            allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
+        else if (comparisonMode === "equalizer_vs_ai")
+          signalToPlay = aiModelSignal;
+        else signalToPlay = outputSignal;
+      } else {
+        if (comparisonMode === "equalizer_vs_ai")
+          signalToPlay =
+            allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
+        else signalToPlay = inputSignal;
       }
-    };
-  },
-  [
-    playbackSpeed,
-    comparisonMode,
-    inputSignal,
-    outputSignal,
-    aiModelSignal,
-    allSlidersAtUnity,
-  ]
-);
+
+      if (!signalToPlay || !signalToPlay.data) return;
+      if (!audioContextRef.current)
+        audioContextRef.current = new (window.AudioContext ||
+          window.webkitAudioContext)();
+      const audioContext = audioContextRef.current;
+
+      if (audioSourceRef.current) {
+        isStoppedManuallyRef.current = true;
+        try {
+          audioSourceRef.current.stop();
+        } catch (e) {}
+      }
+
+      const audioBuffer = audioContext.createBuffer(
+        1,
+        signalToPlay.data.length,
+        signalToPlay.sampleRate
+      );
+      const channelData = audioBuffer.getChannelData(0);
+      // Safe copy
+      for (let i = 0; i < signalToPlay.data.length; i++) {
+        channelData[i] = signalToPlay.data[i];
+      }
+
+      audioSourceRef.current = audioContext.createBufferSource();
+      audioSourceRef.current.buffer = audioBuffer;
+      audioSourceRef.current.playbackRate.value = playbackSpeed;
+      audioSourceRef.current.connect(audioContext.destination);
+
+      isStoppedManuallyRef.current = false;
+      audioSourceRef.current.start(0, startTime);
+
+      setCurrentTime(startTime);
+      setIsPlaying(true);
+      setIsPaused(false);
+      setIsPlayingSecondary(useSecondarySignal);
+
+      audioSourceRef.current.onended = () => {
+        if (!isStoppedManuallyRef.current) {
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
+          }
+          setIsPlaying(false);
+          setIsPaused(false);
+          setCurrentTime(0);
+        }
+      };
+    },
+    [
+      playbackSpeed,
+      comparisonMode,
+      inputSignal,
+      outputSignal,
+      aiModelSignal,
+      sliders,
+      allSlidersAtUnity,
+    ]
+  );
 
   const playAudio = useCallback(
     (useSecondarySignal = false) => {
@@ -549,18 +533,6 @@ const playAudioFromTime = useCallback(
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
-      // Save current position when pausing
-      if (audioContextRef.current && playbackStartTimeRef.current !== null) {
-        const now = audioContextRef.current.currentTime;
-        const timeElapsed = (now - playbackStartTimeRef.current) * playbackSpeed;
-        const pausedTime = playbackInitialTimeRef.current + timeElapsed;
-        if (inputSignal) {
-          const clampedTime = Math.min(pausedTime, inputSignal.duration);
-          setCurrentTime(clampedTime);
-          playbackInitialTimeRef.current = clampedTime;
-        }
-      }
-      playbackStartTimeRef.current = null;
       setIsPlaying(false);
       setIsPaused(true);
     }
@@ -580,8 +552,6 @@ const playAudioFromTime = useCallback(
     setIsPlaying(false);
     setIsPaused(false);
     setCurrentTime(0);
-    playbackStartTimeRef.current = null;
-    playbackInitialTimeRef.current = 0;
   };
   const handleSeek = useCallback(
     (seekTime) => {
@@ -621,54 +591,16 @@ const playAudioFromTime = useCallback(
     setZoom(1);
     setPan(0);
   };
-  // MainPage.jsx - CORRECTED handleToggleAudio
-const handleToggleAudio = () => {
-  const newIsSecondary = !isPlayingSecondary;
-
-  if (isPlaying) {
-    // Calculate the ACTUAL current playback position
-    let actualCurrentTime = currentTime;
-    if (audioContextRef.current && playbackStartTimeRef.current !== null) {
-      const now = audioContextRef.current.currentTime;
-      const timeElapsed = (now - playbackStartTimeRef.current) * playbackSpeed;
-      actualCurrentTime = playbackInitialTimeRef.current + timeElapsed;
-      // Clamp to signal duration
-      if (inputSignal) {
-        actualCurrentTime = Math.min(actualCurrentTime, inputSignal.duration);
-      }
-    }
-
-    // CRITICAL FIX: Stop current audio WITHOUT resetting currentTime state
-    if (audioSourceRef.current) {
-      isStoppedManuallyRef.current = true;
-      try {
-        audioSourceRef.current.stop();
-      } catch (e) {}
-      audioSourceRef.current = null;
-    }
-
-    // Update which signal is playing
-    setIsPlayingSecondary(newIsSecondary);
-
-    // Continue playing from the SAME position with the new signal
-    setTimeout(() => {
-      playAudioFromTime(actualCurrentTime, newIsSecondary);
-    }, 10);
-  } else {
-    // If paused, just toggle which signal will play next
-    setIsPlayingSecondary(newIsSecondary);
-  }
-};
+  const handleToggleAudio = () => {
+    const newIsSecondary = !isPlayingSecondary;
+    if (isPlaying) playAudioFromTime(currentTime, newIsSecondary);
+    else setIsPlayingSecondary(newIsSecondary);
+  };
 
   useEffect(() => {
     if (!isPlaying || !inputSignal || !audioContextRef.current) return;
     const initialTime = currentTime;
     const startTime = audioContextRef.current.currentTime;
-
-    // Update refs for accurate position tracking when toggling
-    playbackStartTimeRef.current = startTime;
-    playbackInitialTimeRef.current = initialTime;
-
     const animate = () => {
       if (!audioContextRef.current || !isPlaying) return;
       const now = audioContextRef.current.currentTime;
@@ -686,7 +618,6 @@ const handleToggleAudio = () => {
       if (animationFrameRef.current)
         cancelAnimationFrame(animationFrameRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, inputSignal, playbackSpeed]);
 
   useEffect(() => {
@@ -706,7 +637,6 @@ const handleToggleAudio = () => {
           setSliders(configs[currentMode].sliders);
           slidersRef.current = configs[currentMode].sliders;
         }
-      } catch (e) {
       } finally {
         setIsLoadingModes(false);
       }
@@ -795,6 +725,7 @@ const handleToggleAudio = () => {
           clearCache();
           setIsLoadingModes(true);
           try {
+            setPreviewSpectrogramData(null);
             // 1. Tell backend to reset
             await apiService.resetModes();
             // 2. Clear local storage
@@ -809,8 +740,7 @@ const handleToggleAudio = () => {
               slidersRef.current = [...newBaseSliders, ...currentVoiceSliders];
             }
             showToast("✅ Reset", "success");
-            // 4. Clear preview spectrogram and force a Full Equalization update with new defaults
-            setPreviewSpectrogramData(null);
+            // 4. Force a Full Equalization update (not preview) with new defaults
             if (inputSignal && apiSignal)
               setTimeout(() => applyEqualization(false), 100);
           } catch (e) {
@@ -846,6 +776,21 @@ const handleToggleAudio = () => {
       )}
 
       <div className="main-content">
+        {isAIModeEnabled && (
+          <div className="ai-section">
+            <AIModelSection
+              ref={aiModelRef}
+              mode={currentMode}
+              inputSignal={inputSignal}
+              outputSignal={outputSignal}
+              sliders={sliders}
+              onModelResult={handleAIModelResult}
+              onComparisonChange={setComparisonMode}
+              onVoiceGainsUpdate={handleVoiceGainsUpdate}
+            />
+          </div>
+        )}
+
         <div className="sliders-section">
           <div className="sliders-header">
             <div className="sliders-title">
@@ -873,6 +818,7 @@ const handleToggleAudio = () => {
                   canAddCustomSliders() && !slider.isVoice
                     ? (id) => {
                         setSliders((prev) => prev.filter((s) => s.id !== id));
+                        setPreviewSpectrogramData(null);
                         setTimeout(() => applyEqualization(false), 100);
                       }
                     : null
@@ -904,7 +850,6 @@ const handleToggleAudio = () => {
             duration={inputSignal.duration}
             onToggleAudio={handleToggleAudio}
             isPlayingOriginal={!isPlayingSecondary}
-            comparisonMode={comparisonMode}
           />
         )}
 
@@ -1002,21 +947,6 @@ const handleToggleAudio = () => {
             />
           </div>
         </div>
-
-        {isAIModeEnabled && (
-          <div className="ai-section">
-            <AIModelSection
-              ref={aiModelRef}
-              mode={currentMode}
-              inputSignal={inputSignal}
-              outputSignal={outputSignal}
-              sliders={sliders}
-              onModelResult={handleAIModelResult}
-              onComparisonChange={setComparisonMode}
-              onVoiceGainsUpdate={handleVoiceGainsUpdate}
-            />
-          </div>
-        )}
       </div>
     </div>
   );

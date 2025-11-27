@@ -7,38 +7,7 @@
       "description": "Custom frequency bands with user-defined sliders",
       "allowCustomSliders": true,
       "icon": "⚙️",
-      "sliders": [
-        {
-          "id": 1764010160900,
-          "label": "Range 900",
-          "value": 0.56,
-          "min": 0,
-          "max": 2,
-          "minFreq": 0,
-          "width": 5000,
-          "freqRanges": [
-            [
-              0,
-              5000
-            ]
-          ]
-        },
-        {
-          "id": 1764010981088,
-          "label": "Range 88",
-          "value": 1.19,
-          "min": 0,
-          "max": 2,
-          "minFreq": 2675,
-          "width": 2325,
-          "freqRanges": [
-            [
-              2675,
-              5000
-            ]
-          ]
-        }
-      ]
+      "sliders": []
     },
     "musical": {
       "mode": "musical",
@@ -50,7 +19,7 @@
         {
           "id": 1,
           "label": "🎤 Vocals",
-          "value": 0.88,
+          "value": 1,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -75,7 +44,7 @@
         {
           "id": 2,
           "label": "🥁 Drums",
-          "value": 0,
+          "value": 1,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -100,7 +69,7 @@
         {
           "id": 3,
           "label": "🎸 Bass",
-          "value": 0,
+          "value": 1,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -121,7 +90,7 @@
         {
           "id": 4,
           "label": "🎸 Guitar",
-          "value": 0.93,
+          "value": 1,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -146,7 +115,7 @@
         {
           "id": 5,
           "label": "🎹 Piano",
-          "value": 2,
+          "value": 1,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -167,7 +136,7 @@
         {
           "id": 6,
           "label": "🎧 Other",
-          "value": 0,
+          "value": 1,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -194,8 +163,8 @@
           "max": 2,
           "freqRanges": [
             [
-              500,
-              1000
+              300,
+              1300
             ]
           ]
         },
@@ -207,8 +176,8 @@
           "max": 2,
           "freqRanges": [
             [
-              300,
-              600
+              600,
+              2600
             ]
           ]
         },
@@ -250,33 +219,49 @@
         {
           "id": 1,
           "label": "👨 Male Voice",
-          "value": 0,
+          "value": 1,
           "min": 0,
           "max": 2,
           "freqRanges": [
             [
-              85,
+              0,
               180
+            ],
+            [
+              300,
+              400
+            ],
+            [
+              550,
+              650
             ]
           ]
         },
         {
           "id": 2,
           "label": "👩 Female Voice",
-          "value": 0,
+          "value": 1,
           "min": 0,
           "max": 2,
           "freqRanges": [
             [
-              165,
+              180,
               255
+            ],
+            [
+              400,
+              540
+            ],
+            [
+              1000,
+              2000
             ]
           ]
         },
         {
           "id": 3,
           "label": "👴 Old Person",
-          "value": 0.04,
+          "value": 0,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -289,7 +274,7 @@
         {
           "id": 4,
           "label": "👦 Young Person",
-          "value": 2,
+          "value": 1,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -302,5 +287,5 @@
       ]
     }
   },
-  "lastUpdated": "2025-11-25T14:37:56.716674"
+  "lastUpdated": "2025-11-27T04:37:27.660821"
 }

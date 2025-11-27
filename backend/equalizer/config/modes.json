@@ -9,24 +9,9 @@
       "icon": "⚙️",
       "sliders": [
         {
-          "id": 1764221646516,
-          "label": " Range [3658,8154]",
-          "value": 1,
-          "min": 0,
-          "max": 2,
-          "minFreq": 3658,
-          "width": 4496,
-          "freqRanges": [
-            [
-              3658,
-              8154
-            ]
-          ]
-        },
-        {
-          "id": 1764221655364,
-          "label": "noise",
-          "value": 1,
+          "id": 1764222519295,
+          "label": " Range [0,5000]",
+          "value": 0,
           "min": 0,
           "max": 2,
           "minFreq": 0,
@@ -318,5 +303,5 @@
       ]
     }
   },
-  "lastUpdated": "2025-11-27T07:34:17.884940"
+  "lastUpdated": "2025-11-27T07:48:56.851657"
 }

@@ -195,55 +195,63 @@ function MainPage() {
   };
 
   // --- Apply Equalization (Core Logic) ---
-  const applyEqualization = useCallback(
-    async (isPreview = false) => {
-      if (!inputSignal || !apiSignal || isProcessingRef.current) return;
+  // --- Apply Equalization (Core Logic) ---
+const applyEqualization = useCallback(
+  async (isPreview = false) => {
+    if (!inputSignal || !apiSignal || isProcessingRef.current) return;
 
-      // Don't lock processing for previews
-      if (!isPreview) isProcessingRef.current = true;
+    // Don't lock processing for previews
+    if (!isPreview) isProcessingRef.current = true;
 
-      try {
-        // Ensure we ONLY send the original EQ sliders, filtering out voice sliders
-        const eqSliders = slidersRef.current.filter((s) => !s.isVoice);
+    try {
+      // Ensure we ONLY send the original EQ sliders, filtering out voice sliders
+      const eqSliders = slidersRef.current.filter((s) => !s.isVoice);
+      
+      console.log(`Applying equalization (preview: ${isPreview}) with ${eqSliders.length} sliders:`, eqSliders); // Debug log
 
-        const response = await apiService.equalize(
-          apiSignal.data,
-          apiSignal.sampleRate,
-          eqSliders,
-          currentMode,
-          isPreview // true = fast spectrogram, false = full audio
-        );
+      const response = await apiService.equalize(
+        apiSignal.data,
+        apiSignal.sampleRate,
+        eqSliders,
+        currentMode,
+        isPreview // true = fast spectrogram, false = full audio
+      );
 
-        if (isPreview) {
-          // PREVIEW MODE: Update ONLY the spectrogram graph immediately
-          if (response.data.spectrogram) {
-            setPreviewSpectrogramData(response.data.spectrogram);
-          }
+      if (isPreview) {
+        // PREVIEW MODE: Update ONLY the spectrogram graph immediately
+        if (response.data.spectrogram) {
+          console.log("Setting preview spectrogram data"); // Debug log
+          setPreviewSpectrogramData(response.data.spectrogram);
         } else {
-          // FULL MODE: Update the Audio Signal
-          const result = response.data;
-          const newOutputSignal = {
-            data: result.outputSignal,
-            sampleRate: result.sampleRate || apiSignal.sampleRate,
-            duration: inputSignal.duration,
-          };
-
-          setOutputSignal(newOutputSignal);
-
-          // Update FFT silently
-          if (fftTimeoutRef.current) clearTimeout(fftTimeoutRef.current);
-          fftTimeoutRef.current = setTimeout(() => {
-            computeFourierTransform(newOutputSignal, "output", true); // silent=true
-          }, 100);
+          console.warn("No spectrogram data in preview response"); // Debug log
         }
-      } catch (error) {
-        if (!isPreview) showToast("❌ Equalization failed", "error");
-      } finally {
-        if (!isPreview) isProcessingRef.current = false;
+      } else {
+        // FULL MODE: Update the Audio Signal
+        const result = response.data;
+        const newOutputSignal = {
+          data: result.outputSignal,
+          sampleRate: result.sampleRate || apiSignal.sampleRate,
+          duration: inputSignal.duration,
+        };
+
+        console.log("Setting new output signal"); // Debug log
+        setOutputSignal(newOutputSignal);
+
+        // Update FFT silently
+        if (fftTimeoutRef.current) clearTimeout(fftTimeoutRef.current);
+        fftTimeoutRef.current = setTimeout(() => {
+          computeFourierTransform(newOutputSignal, "output", true); // silent=true
+        }, 100);
       }
-    },
-    [inputSignal, apiSignal, currentMode]
-  );
+    } catch (error) {
+      console.error("Equalization error:", error); // Debug log
+      if (!isPreview) showToast("❌ Equalization failed", "error");
+    } finally {
+      if (!isPreview) isProcessingRef.current = false;
+    }
+  },
+  [inputSignal, apiSignal, currentMode]
+);
 
   // --- Apply AI Mixing ---
   const applyAIMixing = useCallback(async () => {
@@ -288,64 +296,64 @@ function MainPage() {
   }, [inputSignal, aiStems]);
 
   // --- Slider Handler ---
-  const handleSliderChange = (sliderId, newValue) => {
-    const updatedSliders = sliders.map((slider) =>
-      slider.id === sliderId ? { ...slider, value: newValue } : slider
-    );
-    setSliders(updatedSliders);
-    slidersRef.current = updatedSliders;
+  // --- Slider Handler ---
+const handleSliderChange = (sliderId, newValue) => {
+  const updatedSliders = sliders.map((slider) =>
+    slider.id === sliderId ? { ...slider, value: newValue } : slider
+  );
+  setSliders(updatedSliders);
+  slidersRef.current = updatedSliders;
 
-    // Determine what kind of slider changed
-    const changedSlider = updatedSliders.find((s) => s.id === sliderId);
-    const isVoiceSlider = changedSlider?.isVoice;
+  // Determine what kind of slider changed
+  const changedSlider = updatedSliders.find((s) => s.id === sliderId);
+  const isVoiceSlider = changedSlider?.isVoice;
 
-    if (inputSignal && apiSignal) {
-      const now = Date.now();
+  if (inputSignal && apiSignal) {
+    const now = Date.now();
 
-      if (isVoiceSlider) {
-        // === CLEAR PREVIEW DATA ===
-        // If we are moving a voice slider, the EQ preview data is irrelevant and causes visual glitches.
-        if (previewSpectrogramData) setPreviewSpectrogramData(null);
-        
-        // Debounce AI Processing
-        if (equalizationTimeoutRef.current) clearTimeout(equalizationTimeoutRef.current);
-        equalizationTimeoutRef.current = setTimeout(() => {
-             if (aiModelRef.current) {
-                const voiceGains = {};
-                updatedSliders.forEach((s) => {
-                  if (s.isVoice && s.voiceKey) voiceGains[s.voiceKey] = s.value;
-                });
-                aiModelRef.current.remixVoices(voiceGains);
-            }
-        }, 300);
+    if (isVoiceSlider) {
+      // === CLEAR PREVIEW DATA ===
+      // If we are moving a voice slider, the EQ preview data is irrelevant and causes visual glitches.
+      if (previewSpectrogramData) setPreviewSpectrogramData(null);
+      
+      // Debounce AI Processing
+      if (equalizationTimeoutRef.current) clearTimeout(equalizationTimeoutRef.current);
+      equalizationTimeoutRef.current = setTimeout(() => {
+           if (aiModelRef.current) {
+              const voiceGains = {};
+              updatedSliders.forEach((s) => {
+                if (s.isVoice && s.voiceKey) voiceGains[s.voiceKey] = s.value;
+              });
+              aiModelRef.current.remixVoices(voiceGains);
+          }
+      }, 300);
 
-      } else {
-        // === ORIGINAL EQ SLIDER CHANGED ===
-        // 1. Fast Preview (Equalizer Only)
-        if (!(isAIMode && aiStems && currentMode !== "musical")) {
-            if (now - lastPreviewTimeRef.current > 50) {
-              applyEqualization(true); // isPreview = true
-              lastPreviewTimeRef.current = now;
-            }
-        }
-
-        // 2. Full Update
-        if (equalizationTimeoutRef.current) clearTimeout(equalizationTimeoutRef.current);
-        equalizationTimeoutRef.current = setTimeout(() => {
-            if (currentMode === "musical" && hasAIStems && aiModelRef.current) {
-                aiModelRef.current.remixStems();
-            } else if (isAIMode && aiStems && currentMode !== "musical") {
-                applyAIMixing();
-            }
-
-            // Only apply EQ if we aren't in a mode where EQ sliders override everything
-            if (!(isAIMode && aiStems && currentMode !== "musical")) {
-                applyEqualization(false);
-            }
-        }, 300);
+    } else {
+      // === ORIGINAL EQ SLIDER CHANGED ===
+      // 1. Fast Preview (ALWAYS for non-voice sliders in generic/human/musical modes)
+      if (now - lastPreviewTimeRef.current > 50) {
+        console.log("Triggering fast preview for slider:", sliderId); // Debug log
+        applyEqualization(true); // isPreview = true
+        lastPreviewTimeRef.current = now;
       }
+
+      // 2. Full Update
+      if (equalizationTimeoutRef.current) clearTimeout(equalizationTimeoutRef.current);
+      equalizationTimeoutRef.current = setTimeout(() => {
+          console.log("Triggering full update for slider:", sliderId); // Debug log
+          
+          if (currentMode === "musical" && hasAIStems && aiModelRef.current) {
+              aiModelRef.current.remixStems();
+          } else if (currentMode === "human" && aiStems) {
+              applyAIMixing();
+          } else {
+              // FIXED: Always apply EQ for generic mode and when not in AI override mode
+              applyEqualization(false);
+          }
+      }, 300);
     }
-  };
+  }
+};
 
   // --- Mode Change ---
   const handleModeChange = async (e) => {

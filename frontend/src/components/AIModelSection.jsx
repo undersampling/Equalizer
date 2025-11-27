@@ -48,7 +48,6 @@ function AIModelSection({ mode, inputSignal, outputSignal, sliders, onModelResul
         setSeparatedVoices(result.voices);
         
         // Notify parent about voice separation for adding to equalizer
-        // Create voice sliders for main equalizer
         if (onVoiceGainsUpdate) {
           const voiceSliders = Object.keys(result.voices).map((voiceKey, index) => ({
             id: `voice-${voiceKey}`,
@@ -57,7 +56,7 @@ function AIModelSection({ mode, inputSignal, outputSignal, sliders, onModelResul
             min: 0,
             max: 2,
             voiceKey: voiceKey,
-            isVoice: true, // This flag is critical for logic separation in MainPage
+            isVoice: true,
             freqRanges: null
           }));
           onVoiceGainsUpdate(voiceSliders);
@@ -99,7 +98,6 @@ function AIModelSection({ mode, inputSignal, outputSignal, sliders, onModelResul
       });
 
       if (Object.keys(stemsWithGains).length === 0) {
-        console.warn("No matching stems found for sliders");
         setIsRemixing(false);
         setIsProcessing(false);
         return;
@@ -118,8 +116,6 @@ function AIModelSection({ mode, inputSignal, outputSignal, sliders, onModelResul
       };
 
       onModelResult(aiSignal);
-      
-      // Automatically show comparison after AI processing
       onComparisonChange("equalizer_vs_ai");
       
     } catch (error) {
@@ -139,7 +135,6 @@ function AIModelSection({ mode, inputSignal, outputSignal, sliders, onModelResul
       const voicesWithGains = {};
       
       if (gains) {
-        // Use provided gains (from equalizer sliders)
         Object.keys(voices).forEach((voiceKey) => {
           const gain = gains[voiceKey] !== undefined ? gains[voiceKey] : 1.0;
           voicesWithGains[voiceKey] = {
@@ -148,7 +143,6 @@ function AIModelSection({ mode, inputSignal, outputSignal, sliders, onModelResul
           };
         });
       } else {
-        // Initial remix with default gains
         Object.keys(voices).forEach((voiceKey) => {
           voicesWithGains[voiceKey] = {
             data: voices[voiceKey].data,
@@ -170,8 +164,6 @@ function AIModelSection({ mode, inputSignal, outputSignal, sliders, onModelResul
       };
 
       onModelResult(aiSignal);
-      
-      // Automatically show comparison after AI processing
       onComparisonChange("equalizer_vs_ai");
       
     } catch (error) {
@@ -273,19 +265,20 @@ function AIModelSection({ mode, inputSignal, outputSignal, sliders, onModelResul
     }
   };
 
+  // UPDATED: Returns text names instead of icons
   const getStemDisplayName = (stemKey) => {
     const names = {
-      drums: '🥁',
-      bass: '🎸',
-      vocals: '🎤',
-      guitar: '🎸',
-      piano: '🎹',
-      other: '🎧'
+      drums: 'Drums',
+      bass: 'Bass',
+      vocals: 'Vocals',
+      guitar: 'Guitar',
+      piano: 'Piano',
+      other: 'Other'
     };
-    return names[stemKey] || stemKey;
+    // Capitalize fallback
+    return names[stemKey] || stemKey.charAt(0).toUpperCase() + stemKey.slice(1);
   };
 
-  // Expose remix function to parent component
   useImperativeHandle(ref, () => ({
     remixStems: () => {
       if (separatedStems) {
@@ -327,7 +320,7 @@ function AIModelSection({ mode, inputSignal, outputSignal, sliders, onModelResul
         </button>
       </div>
 
-      {/* Compact Stem/Voice Icons - Show after processing */}
+      {/* Compact Stems Section */}
       {mode === "musical" && separatedStems && (
         <div className="compact-stems-section">
           <h4 className="compact-section-title">🎵 Individual Stems</h4>
@@ -337,9 +330,10 @@ function AIModelSection({ mode, inputSignal, outputSignal, sliders, onModelResul
                 key={stemKey}
                 className={`compact-stem-btn ${playingStem === stemKey ? 'playing' : ''}`}
                 onClick={() => playStem(stemKey)}
-                title={`Play ${stemKey} stem`}
+                title={`Play ${stemKey}`}
               >
-                <span className="compact-stem-icon">{getStemDisplayName(stemKey)}</span>
+                {/* CHANGED: Replaced Icon with Text */}
+                <span className="compact-stem-text">{getStemDisplayName(stemKey)}</span>
                 <span className="compact-stem-state">{playingStem === stemKey ? "⏸️" : "▶️"}</span>
               </button>
             ))}
@@ -347,6 +341,7 @@ function AIModelSection({ mode, inputSignal, outputSignal, sliders, onModelResul
         </div>
       )}
 
+      {/* Compact Voices Section (Kept icons for voices as requested, but aligns to new row layout) */}
       {mode === "human" && separatedVoices && (
         <div className="compact-stems-section">
           <h4 className="compact-section-title">👥 Individual Voices</h4>

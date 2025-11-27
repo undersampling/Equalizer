@@ -83,6 +83,10 @@ function MainPage() {
   const isStoppedManuallyRef = useRef(false);
   const lastPreviewTimeRef = useRef(0);
 
+  // === FIX: The Queue Flag ===
+  // This ref tracks if a change happened while we were busy processing
+  const needsUpdateRef = useRef(false);
+
   // --- Helpers ---
   const showToast = (message, type = "success") => {
     setToast({ message, type, visible: true });
@@ -194,64 +198,76 @@ function MainPage() {
     }
   };
 
-  // --- Apply Equalization (Core Logic) ---
-  // --- Apply Equalization (Core Logic) ---
-const applyEqualization = useCallback(
-  async (isPreview = false) => {
-    if (!inputSignal || !apiSignal || isProcessingRef.current) return;
+  // --- Apply Equalization (Core Logic with Queue) ---
+  const applyEqualization = useCallback(
+    async (isPreview = false) => {
+      if (!inputSignal || !apiSignal) return;
 
-    // Don't lock processing for previews
-    if (!isPreview) isProcessingRef.current = true;
-
-    try {
-      // Ensure we ONLY send the original EQ sliders, filtering out voice sliders
-      const eqSliders = slidersRef.current.filter((s) => !s.isVoice);
-      
-      console.log(`Applying equalization (preview: ${isPreview}) with ${eqSliders.length} sliders:`, eqSliders); // Debug log
-
-      const response = await apiService.equalize(
-        apiSignal.data,
-        apiSignal.sampleRate,
-        eqSliders,
-        currentMode,
-        isPreview // true = fast spectrogram, false = full audio
-      );
-
-      if (isPreview) {
-        // PREVIEW MODE: Update ONLY the spectrogram graph immediately
-        if (response.data.spectrogram) {
-          console.log("Setting preview spectrogram data"); // Debug log
-          setPreviewSpectrogramData(response.data.spectrogram);
-        } else {
-          console.warn("No spectrogram data in preview response"); // Debug log
-        }
-      } else {
-        // FULL MODE: Update the Audio Signal
-        const result = response.data;
-        const newOutputSignal = {
-          data: result.outputSignal,
-          sampleRate: result.sampleRate || apiSignal.sampleRate,
-          duration: inputSignal.duration,
-        };
-
-        console.log("Setting new output signal"); // Debug log
-        setOutputSignal(newOutputSignal);
-
-        // Update FFT silently
-        if (fftTimeoutRef.current) clearTimeout(fftTimeoutRef.current);
-        fftTimeoutRef.current = setTimeout(() => {
-          computeFourierTransform(newOutputSignal, "output", true); // silent=true
-        }, 100);
+      // 1. Queue Logic: If busy, mark update needed
+      // Note: We bypass this for previews to keep graph snappy
+      if (isProcessingRef.current && !isPreview) {
+        needsUpdateRef.current = true;
+        return;
       }
-    } catch (error) {
-      console.error("Equalization error:", error); // Debug log
-      if (!isPreview) showToast("❌ Equalization failed", "error");
-    } finally {
-      if (!isPreview) isProcessingRef.current = false;
-    }
-  },
-  [inputSignal, apiSignal, currentMode]
-);
+
+      // 2. Lock Processing
+      if (!isPreview) isProcessingRef.current = true;
+
+      try {
+        // ALWAYS use slidersRef.current (latest values), NOT the 'sliders' state closure
+        const eqSliders = slidersRef.current.filter((s) => !s.isVoice);
+
+        console.log(
+          `Processing EQ with ${eqSliders.length} sliders (Preview: ${isPreview})`
+        );
+
+        const response = await apiService.equalize(
+          apiSignal.data,
+          apiSignal.sampleRate,
+          eqSliders,
+          currentMode,
+          isPreview
+        );
+
+        if (isPreview) {
+          if (response.data.spectrogram) {
+            setPreviewSpectrogramData(response.data.spectrogram);
+          }
+        } else {
+          const result = response.data;
+          const newOutputSignal = {
+            data: result.outputSignal,
+            sampleRate: result.sampleRate || apiSignal.sampleRate,
+            duration: inputSignal.duration,
+          };
+
+          setOutputSignal(newOutputSignal);
+
+          // Update FFT silently
+          if (fftTimeoutRef.current) clearTimeout(fftTimeoutRef.current);
+          fftTimeoutRef.current = setTimeout(() => {
+            computeFourierTransform(newOutputSignal, "output", true);
+          }, 100);
+        }
+      } catch (error) {
+        console.error("Equalization Error:", error);
+        if (!isPreview) showToast("❌ Equalization failed", "error");
+      } finally {
+        if (!isPreview) {
+          // 3. Unlock Processing
+          isProcessingRef.current = false;
+
+          // 4. CHECK QUEUE: If pending updates exist, run again IMMEDIATELY
+          if (needsUpdateRef.current) {
+            needsUpdateRef.current = false;
+            // Recursively call to apply the queued changes
+            applyEqualization(false);
+          }
+        }
+      }
+    },
+    [inputSignal, apiSignal, currentMode]
+  );
 
   // --- Apply AI Mixing ---
   const applyAIMixing = useCallback(async () => {
@@ -295,65 +311,60 @@ const applyEqualization = useCallback(
     }
   }, [inputSignal, aiStems]);
 
-  // --- Slider Handler ---
-  // --- Slider Handler ---
-const handleSliderChange = (sliderId, newValue) => {
-  const updatedSliders = sliders.map((slider) =>
-    slider.id === sliderId ? { ...slider, value: newValue } : slider
-  );
-  setSliders(updatedSliders);
-  slidersRef.current = updatedSliders;
+  // --- Slider Handler (Triggered on Change) ---
+  const handleSliderChange = (sliderId, newValue) => {
+    // 1. Update State & Ref Immediately
+    const updatedSliders = sliders.map((slider) =>
+      slider.id === sliderId ? { ...slider, value: newValue } : slider
+    );
+    setSliders(updatedSliders);
+    slidersRef.current = updatedSliders; // Crucial for queue logic
 
-  // Determine what kind of slider changed
-  const changedSlider = updatedSliders.find((s) => s.id === sliderId);
-  const isVoiceSlider = changedSlider?.isVoice;
+    const changedSlider = updatedSliders.find((s) => s.id === sliderId);
+    const isVoiceSlider = changedSlider?.isVoice;
 
-  if (inputSignal && apiSignal) {
-    const now = Date.now();
+    if (inputSignal && apiSignal) {
+      const now = Date.now();
 
-    if (isVoiceSlider) {
-      // === CLEAR PREVIEW DATA ===
-      // If we are moving a voice slider, the EQ preview data is irrelevant and causes visual glitches.
-      if (previewSpectrogramData) setPreviewSpectrogramData(null);
-      
-      // Debounce AI Processing
-      if (equalizationTimeoutRef.current) clearTimeout(equalizationTimeoutRef.current);
-      equalizationTimeoutRef.current = setTimeout(() => {
-           if (aiModelRef.current) {
-              const voiceGains = {};
-              updatedSliders.forEach((s) => {
-                if (s.isVoice && s.voiceKey) voiceGains[s.voiceKey] = s.value;
-              });
-              aiModelRef.current.remixVoices(voiceGains);
+      if (isVoiceSlider) {
+        // Voice Logic (AI)
+        if (previewSpectrogramData) setPreviewSpectrogramData(null);
+        if (equalizationTimeoutRef.current)
+          clearTimeout(equalizationTimeoutRef.current);
+        equalizationTimeoutRef.current = setTimeout(() => {
+          if (aiModelRef.current) {
+            const voiceGains = {};
+            updatedSliders.forEach((s) => {
+              if (s.isVoice && s.voiceKey) voiceGains[s.voiceKey] = s.value;
+            });
+            aiModelRef.current.remixVoices(voiceGains);
           }
-      }, 300);
+        }, 300);
+      } else {
+        // EQ Logic
+        // 1. Fast Preview (Graph)
+        if (now - lastPreviewTimeRef.current > 50) {
+          applyEqualization(true);
+          lastPreviewTimeRef.current = now;
+        }
 
-    } else {
-      // === ORIGINAL EQ SLIDER CHANGED ===
-      // 1. Fast Preview (ALWAYS for non-voice sliders in generic/human/musical modes)
-      if (now - lastPreviewTimeRef.current > 50) {
-        console.log("Triggering fast preview for slider:", sliderId); // Debug log
-        applyEqualization(true); // isPreview = true
-        lastPreviewTimeRef.current = now;
-      }
-
-      // 2. Full Update
-      if (equalizationTimeoutRef.current) clearTimeout(equalizationTimeoutRef.current);
-      equalizationTimeoutRef.current = setTimeout(() => {
-          console.log("Triggering full update for slider:", sliderId); // Debug log
-          
+        // 2. Full Update (Audio)
+        if (equalizationTimeoutRef.current)
+          clearTimeout(equalizationTimeoutRef.current);
+        equalizationTimeoutRef.current = setTimeout(() => {
+          // If this call finds the processor busy, it will just mark the queue
+          // and the running process will pick it up when done.
           if (currentMode === "musical" && hasAIStems && aiModelRef.current) {
-              aiModelRef.current.remixStems();
+            aiModelRef.current.remixStems();
           } else if (currentMode === "human" && aiStems) {
-              applyAIMixing();
+            applyAIMixing();
           } else {
-              // FIXED: Always apply EQ for generic mode and when not in AI override mode
-              applyEqualization(false);
+            applyEqualization(false);
           }
-      }, 300);
+        }, 300);
+      }
     }
-  }
-};
+  };
 
   // --- Mode Change ---
   const handleModeChange = async (e) => {
@@ -377,7 +388,7 @@ const handleSliderChange = (sliderId, newValue) => {
       setComparisonMode(null);
       setShowAIGraphs(false);
       setHasAIStems(false);
-      setPreviewSpectrogramData(null); // CLEAR PREVIEW HERE
+      setPreviewSpectrogramData(null);
 
       if (inputSignal && apiSignal)
         setTimeout(() => applyEqualization(false), 100);
@@ -393,8 +404,6 @@ const handleSliderChange = (sliderId, newValue) => {
     setShowAIGraphs(true);
     setHasAIStems(true);
     setComparisonMode(null);
-    
-    // Clear any stuck EQ preview data to force spectrogram to render the new AI signal
     setPreviewSpectrogramData(null);
 
     if (aiSignal.fourierData) setAiModelFourierData(aiSignal.fourierData);
@@ -425,11 +434,9 @@ const handleSliderChange = (sliderId, newValue) => {
           duration: audioBuffer.duration,
         };
 
-        // 1. Set Input State
         setInputSignal(originalSignal);
         setApiSignal(originalSignal);
 
-        // Reset generic UI states
         setAiModelSignal(null);
         setAiModelFourierData(null);
         setComparisonMode(null);
@@ -440,7 +447,6 @@ const handleSliderChange = (sliderId, newValue) => {
         setIsPlaying(false);
         setIsPaused(false);
 
-        // 2. CHECK EXISTING SLIDERS
         const currentSliders = slidersRef.current.filter((s) => !s.isVoice);
         const hasChanges = currentSliders.some(
           (s) => Math.abs(s.value - 1.0) > 0.001
@@ -463,7 +469,7 @@ const handleSliderChange = (sliderId, newValue) => {
               duration: originalSignal.duration,
             };
             setOutputSignal(processedSignal);
-            computeFourierTransform(processedSignal, "output"); 
+            computeFourierTransform(processedSignal, "output");
           } catch (error) {
             console.error(error);
             setOutputSignal(originalSignal);
@@ -492,86 +498,87 @@ const handleSliderChange = (sliderId, newValue) => {
 
   // --- Audio Playback Logic ---
   const playAudioFromTime = useCallback(
-  (startTime, useSecondarySignal = false) => {
-    let signalToPlay;
-    if (useSecondarySignal) {
-      if (comparisonMode === "ai") signalToPlay = aiModelSignal;
-      else if (comparisonMode === "slider")
-        signalToPlay = allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
-      else if (comparisonMode === "equalizer_vs_ai")
-        signalToPlay = aiModelSignal;
-      else signalToPlay = outputSignal;
-    } else {
-      if (comparisonMode === "equalizer_vs_ai")
-        signalToPlay = allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
-      else signalToPlay = inputSignal;
-    }
-
-    if (!signalToPlay || !signalToPlay.data) return;
-    
-    if (!audioContextRef.current)
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    
-    const audioContext = audioContextRef.current;
-
-    // Resume context if suspended
-    if (audioContext.state === 'suspended') {
-      audioContext.resume();
-    }
-
-    // Stop any existing audio
-    if (audioSourceRef.current) {
-      isStoppedManuallyRef.current = true;
-      try {
-        audioSourceRef.current.stop();
-      } catch (e) {}
-    }
-
-    const audioBuffer = audioContext.createBuffer(
-      1,
-      signalToPlay.data.length,
-      signalToPlay.sampleRate
-    );
-    const channelData = audioBuffer.getChannelData(0);
-    for (let i = 0; i < signalToPlay.data.length; i++) {
-      channelData[i] = signalToPlay.data[i];
-    }
-
-    audioSourceRef.current = audioContext.createBufferSource();
-    audioSourceRef.current.buffer = audioBuffer;
-    audioSourceRef.current.playbackRate.value = playbackSpeed;
-    audioSourceRef.current.connect(audioContext.destination);
-
-    isStoppedManuallyRef.current = false;
-    audioSourceRef.current.start(0, startTime);
-
-    // CRITICAL FIX: Set currentTime here for animation sync
-    setCurrentTime(startTime);
-    setIsPlaying(true);
-    setIsPaused(false);
-    setIsPlayingSecondary(useSecondarySignal);
-
-    audioSourceRef.current.onended = () => {
-      if (!isStoppedManuallyRef.current) {
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-          animationFrameRef.current = null;
-        }
-        setIsPlaying(false);
-        setIsPaused(false);
-        setCurrentTime(inputSignal?.duration || 0);
+    (startTime, useSecondarySignal = false) => {
+      let signalToPlay;
+      if (useSecondarySignal) {
+        if (comparisonMode === "ai") signalToPlay = aiModelSignal;
+        else if (comparisonMode === "slider")
+          signalToPlay =
+            allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
+        else if (comparisonMode === "equalizer_vs_ai")
+          signalToPlay = aiModelSignal;
+        else signalToPlay = outputSignal;
+      } else {
+        if (comparisonMode === "equalizer_vs_ai")
+          signalToPlay =
+            allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
+        else signalToPlay = inputSignal;
       }
-    };
-  },
-  [
-    playbackSpeed,
-    comparisonMode,
-    inputSignal,
-    outputSignal,
-    aiModelSignal,
-    allSlidersAtUnity,
-  ]
-);
+
+      if (!signalToPlay || !signalToPlay.data) return;
+
+      if (!audioContextRef.current)
+        audioContextRef.current = new (window.AudioContext ||
+          window.webkitAudioContext)();
+
+      const audioContext = audioContextRef.current;
+
+      if (audioContext.state === "suspended") {
+        audioContext.resume();
+      }
+
+      if (audioSourceRef.current) {
+        isStoppedManuallyRef.current = true;
+        try {
+          audioSourceRef.current.stop();
+        } catch (e) {}
+      }
+
+      const audioBuffer = audioContext.createBuffer(
+        1,
+        signalToPlay.data.length,
+        signalToPlay.sampleRate
+      );
+      const channelData = audioBuffer.getChannelData(0);
+      for (let i = 0; i < signalToPlay.data.length; i++) {
+        channelData[i] = signalToPlay.data[i];
+      }
+
+      audioSourceRef.current = audioContext.createBufferSource();
+      audioSourceRef.current.buffer = audioBuffer;
+      audioSourceRef.current.playbackRate.value = playbackSpeed;
+      audioSourceRef.current.connect(audioContext.destination);
+
+      isStoppedManuallyRef.current = false;
+      audioSourceRef.current.start(0, startTime);
+
+      setCurrentTime(startTime);
+      setIsPlaying(true);
+      setIsPaused(false);
+      setIsPlayingSecondary(useSecondarySignal);
+
+      audioSourceRef.current.onended = () => {
+        if (!isStoppedManuallyRef.current) {
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
+          }
+          setIsPlaying(false);
+          setIsPaused(false);
+          setCurrentTime(inputSignal?.duration || 0);
+        }
+      };
+    },
+    [
+      playbackSpeed,
+      comparisonMode,
+      inputSignal,
+      outputSignal,
+      aiModelSignal,
+      allSlidersAtUnity,
+    ]
+  );
+
   const playAudio = useCallback(
     (useSecondarySignal = false) => {
       playAudioFromTime(currentTime, useSecondarySignal);
@@ -580,30 +587,30 @@ const handleSliderChange = (sliderId, newValue) => {
   );
   const handlePlay = () => playAudio(isPlayingSecondary);
   const handlePause = () => {
-  if (isPlaying) {
-    // CRITICAL FIX: Capture current audio time before stopping
-    if (audioSourceRef.current && audioContextRef.current) {
-      // Calculate current position based on when audio started
-      const audioStartTime = audioContextRef.current.currentTime - (currentTime / playbackSpeed);
-      const actualCurrentTime = audioContextRef.current.currentTime - audioStartTime;
-      setCurrentTime(actualCurrentTime); // Update to exact position
-    }
+    if (isPlaying) {
+      if (audioSourceRef.current && audioContextRef.current) {
+        const audioStartTime =
+          audioContextRef.current.currentTime - currentTime / playbackSpeed;
+        const actualCurrentTime =
+          audioContextRef.current.currentTime - audioStartTime;
+        setCurrentTime(actualCurrentTime);
+      }
 
-    isStoppedManuallyRef.current = true;
-    if (audioSourceRef.current) {
-      try {
-        audioSourceRef.current.stop();
-      } catch (e) {}
-      audioSourceRef.current = null;
+      isStoppedManuallyRef.current = true;
+      if (audioSourceRef.current) {
+        try {
+          audioSourceRef.current.stop();
+        } catch (e) {}
+        audioSourceRef.current = null;
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      setIsPlaying(false);
+      setIsPaused(true);
     }
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    setIsPlaying(false);
-    setIsPaused(true);
-  }
-};
+  };
   const handleStop = () => {
     isStoppedManuallyRef.current = true;
     if (audioSourceRef.current) {
@@ -621,38 +628,35 @@ const handleSliderChange = (sliderId, newValue) => {
     setCurrentTime(0);
   };
   const handleSeek = useCallback(
-  (seekTime) => {
-    if (!inputSignal) return;
+    (seekTime) => {
+      if (!inputSignal) return;
 
-    // CRITICAL FIX: Always update currentTime immediately
-    setCurrentTime(seekTime);
+      setCurrentTime(seekTime);
 
-    if (isPlaying) {
-      // Stop current audio and animation
-      if (audioSourceRef.current) {
-        isStoppedManuallyRef.current = true;
-        try {
-          audioSourceRef.current.stop();
-        } catch (e) {}
-        audioSourceRef.current = null;
+      if (isPlaying) {
+        if (audioSourceRef.current) {
+          isStoppedManuallyRef.current = true;
+          try {
+            audioSourceRef.current.stop();
+          } catch (e) {}
+          audioSourceRef.current = null;
+        }
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+
+        setIsPlaying(false);
+        setTimeout(() => {
+          setIsPlaying(true);
+          playAudioFromTime(seekTime, isPlayingSecondary);
+        }, 10);
+      } else {
+        setIsPaused(true);
       }
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-
-      // CRITICAL FIX: Force animation restart by toggling isPlaying
-      setIsPlaying(false);
-      setTimeout(() => {
-        setIsPlaying(true); // This will trigger the useEffect to restart animation
-        playAudioFromTime(seekTime, isPlayingSecondary);
-      }, 10);
-    } else {
-      setIsPaused(true);
-    }
-  },
-  [inputSignal, isPlaying, isPlayingSecondary, playAudioFromTime]
-);
+    },
+    [inputSignal, isPlaying, isPlayingSecondary, playAudioFromTime]
+  );
 
   const handleSpeedChange = (e) => {
     const newSpeed = parseFloat(e.target.value);
@@ -667,82 +671,74 @@ const handleSliderChange = (sliderId, newValue) => {
     setPan(0);
   };
   const handleToggleAudio = () => {
-  const newIsSecondary = !isPlayingSecondary;
-  
-  if (isPlaying) {
-    // CRITICAL FIX: Capture current time before stopping
-    let currentPos = currentTime;
-    if (audioSourceRef.current && audioContextRef.current) {
-      // More accurate time calculation
-      const now = audioContextRef.current.currentTime;
-      // Estimate start time based on current position and playback speed
-      const estimatedStartTime = now - (currentTime / playbackSpeed);
-      currentPos = (now - estimatedStartTime) * playbackSpeed;
-      setCurrentTime(currentPos);
+    const newIsSecondary = !isPlayingSecondary;
+
+    if (isPlaying) {
+      let currentPos = currentTime;
+      if (audioSourceRef.current && audioContextRef.current) {
+        const now = audioContextRef.current.currentTime;
+        const estimatedStartTime = now - currentTime / playbackSpeed;
+        currentPos = (now - estimatedStartTime) * playbackSpeed;
+        setCurrentTime(currentPos);
+      }
+
+      if (audioSourceRef.current) {
+        isStoppedManuallyRef.current = true;
+        try {
+          audioSourceRef.current.stop();
+        } catch (e) {}
+        audioSourceRef.current = null;
+      }
+
+      setIsPlayingSecondary(newIsSecondary);
+      setIsPlaying(false);
+      setTimeout(() => {
+        setIsPlaying(true);
+        playAudioFromTime(currentPos, newIsSecondary);
+      }, 10);
+    } else {
+      setIsPlayingSecondary(newIsSecondary);
     }
-
-    // Stop current audio
-    if (audioSourceRef.current) {
-      isStoppedManuallyRef.current = true;
-      try {
-        audioSourceRef.current.stop();
-      } catch (e) {}
-      audioSourceRef.current = null;
-    }
-
-    // Update secondary signal state
-    setIsPlayingSecondary(newIsSecondary);
-
-    // CRITICAL FIX: Force animation restart
-    setIsPlaying(false);
-    setTimeout(() => {
-      setIsPlaying(true); // This triggers useEffect to restart animation
-      playAudioFromTime(currentPos, newIsSecondary);
-    }, 10);
-  } else {
-    setIsPlayingSecondary(newIsSecondary);
-  }
-};
+  };
 
   useEffect(() => {
-  if (!isPlaying || !inputSignal || !audioContextRef.current) {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    return;
-  }
-
-  // Store the initial state for this animation session
-  const sessionStartTime = audioContextRef.current.currentTime;
-  const sessionInitialTime = currentTime;
-
-  const animate = () => {
-    if (!audioContextRef.current || !isPlaying) {
+    if (!isPlaying || !inputSignal || !audioContextRef.current) {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
       return;
     }
 
-    const now = audioContextRef.current.currentTime;
-    const audioElapsed = now - sessionStartTime;
-    const newTime = sessionInitialTime + audioElapsed * playbackSpeed;
+    const sessionStartTime = audioContextRef.current.currentTime;
+    const sessionInitialTime = currentTime;
 
-    if (newTime <= inputSignal.duration) {
-      setCurrentTime(newTime);
-      animationFrameRef.current = requestAnimationFrame(animate);
-    } else {
-      handleStop();
-    }
-  };
+    const animate = () => {
+      if (!audioContextRef.current || !isPlaying) {
+        return;
+      }
 
-  animationFrameRef.current = requestAnimationFrame(animate);
+      const now = audioContextRef.current.currentTime;
+      const audioElapsed = now - sessionStartTime;
+      const newTime = sessionInitialTime + audioElapsed * playbackSpeed;
 
-  return () => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-  };
-}, [isPlaying, inputSignal, playbackSpeed, currentTime]);
+      if (newTime <= inputSignal.duration) {
+        setCurrentTime(newTime);
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        handleStop();
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [isPlaying, inputSignal, playbackSpeed, currentTime]);
 
   useEffect(() => {
     if (apiSignal) computeFourierTransform(apiSignal, "input", true);
@@ -807,26 +803,15 @@ const handleSliderChange = (sliderId, newValue) => {
     };
   }, []);
 
-  // === SPECTROGRAM PREVIEW LOGIC FIX ===
-  // This function decides if we should pass the Equalizer Preview Data to a specific graph.
-  // We ONLY want to pass it if the graph is currently displaying the Equalizer Output.
   const getOverrideData = (type) => {
-      if (!previewSpectrogramData) return null;
-
-      // Logic: 
-      // 1. If mode is 'equalizer_vs_ai', "input" graph shows EQ, "output" graph shows AI.
-      //    Therefore, pass preview ONLY to "input".
-      // 2. If mode is 'ai' (Original vs AI), neither shows EQ. Pass NULL.
-      // 3. If mode is normal (Original vs EQ), "output" graph shows EQ. Pass preview to "output".
-
-      if (comparisonMode === "equalizer_vs_ai") {
-          return type === "input" ? previewSpectrogramData : null; 
-      } else if (comparisonMode === "ai") {
-          return null;
-      } else {
-          // Default comparison (slider or null): Output is Equalizer
-          return type === "output" ? previewSpectrogramData : null;
-      }
+    if (!previewSpectrogramData) return null;
+    if (comparisonMode === "equalizer_vs_ai") {
+      return type === "input" ? previewSpectrogramData : null;
+    } else if (comparisonMode === "ai") {
+      return null;
+    } else {
+      return type === "output" ? previewSpectrogramData : null;
+    }
   };
 
   return (
@@ -955,9 +940,19 @@ const handleSliderChange = (sliderId, newValue) => {
                 onRemove={
                   canAddCustomSliders() && !slider.isVoice
                     ? (id) => {
-                        setSliders((prev) => prev.filter((s) => s.id !== id));
+                        // 1. Update State & Ref immediately
+                        const updatedSliders = sliders.filter(
+                          (s) => s.id !== id
+                        );
+                        setSliders(updatedSliders);
+                        slidersRef.current = updatedSliders;
+
                         setPreviewSpectrogramData(null);
-                        setTimeout(() => applyEqualization(false), 100);
+
+                        // 2. Trigger Queue Logic
+                        // Even with small delay, the queue in applyEqualization
+                        // will handle rapid actions correctly
+                        setTimeout(() => applyEqualization(false), 50);
                       }
                     : null
                 }
@@ -991,7 +986,6 @@ const handleSliderChange = (sliderId, newValue) => {
             comparisonMode={comparisonMode}
           />
         )}
-
         <div className="signals-section">
           <div className="signals-with-spectrograms">
             <div className="signal-spectro-layout">

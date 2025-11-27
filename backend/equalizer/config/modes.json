@@ -11,7 +11,7 @@
         {
           "id": 1764222519295,
           "label": " Range [0,5000]",
-          "value": 0,
+          "value": 1.03,
           "min": 0,
           "max": 2,
           "minFreq": 0,
@@ -20,6 +20,21 @@
             [
               0,
               5000
+            ]
+          ]
+        },
+        {
+          "id": 1764224012090,
+          "label": " Range [5145,11387]",
+          "value": 0,
+          "min": 0,
+          "max": 2,
+          "minFreq": 5145,
+          "width": 6242,
+          "freqRanges": [
+            [
+              5145,
+              11387
             ]
           ]
         }
@@ -60,7 +75,7 @@
         {
           "id": 2,
           "label": "🥁 Drums",
-          "value": 2,
+          "value": 0,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -106,7 +121,7 @@
         {
           "id": 4,
           "label": "🎸 Guitar",
-          "value": 2,
+          "value": 0,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -277,7 +292,7 @@
         {
           "id": 3,
           "label": "👴 Old Person",
-          "value": 1,
+          "value": 0,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -303,5 +318,5 @@
       ]
     }
   },
-  "lastUpdated": "2025-11-27T08:00:35.953006"
+  "lastUpdated": "2025-11-27T08:23:10.754497"
 }

@@ -15,12 +15,16 @@
   font-weight: 600;
 }
 
+/* UPDATED: Flexbox for Single Row Layout */
 .compact-stems-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap; /* Prevents wrapping to new line */
+  justify-content: center; /* Centers the buttons */
   gap: 10px;
-  max-width: 500px;
-  margin: 0 auto;
+  width: 100%;
+  overflow-x: auto; /* Adds scroll if items don't fit */
+  padding-bottom: 4px; /* Space for scrollbar */
 }
 
 .compact-stem-btn {
@@ -28,13 +32,15 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 12px 8px;
+  padding: 8px 12px;
   background: rgba(139, 92, 246, 0.1);
   border: 2px solid rgba(139, 92, 246, 0.3);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  min-height: 70px;
+  min-height: 60px;
+  min-width: 90px; /* Ensure text fits */
+  flex: 1; /* Distribute space evenly */
   position: relative;
 }
 
@@ -51,9 +57,19 @@
   animation: compact-pulse 2s infinite;
 }
 
+/* NEW: Style for text labels (Music Mode) */
+.compact-stem-text {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f3f4f6;
+  margin-bottom: 6px;
+  text-transform: capitalize;
+}
+
+/* EXISTING: Style for icon labels (Voice Mode) */
 .compact-stem-icon {
-  font-size: 20px;
-  margin-bottom: 4px;
+  font-size: 18px;
+  margin-bottom: 2px;
 }
 
 .compact-stem-label {
@@ -64,32 +80,27 @@
 }
 
 .compact-stem-state {
-  font-size: 12px;
+  font-size: 14px;
   color: #a78bfa;
 }
 
 @keyframes compact-pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.8;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
 }
 
-/* Responsive design for compact stems */
+/* Responsive design */
 @media (max-width: 768px) {
   .compact-stems-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    justify-content: flex-start; /* Left align on mobile so scroll feels natural */
   }
   
   .compact-stem-btn {
-    padding: 10px 6px;
-    min-height: 60px;
+    min-width: 80px;
+    padding: 8px;
   }
   
-  .compact-stem-icon {
-    font-size: 18px;
+  .compact-stem-text {
+    font-size: 12px;
   }
 }

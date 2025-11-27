@@ -41,7 +41,8 @@
 }
 
 @keyframes pulse-dot {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
@@ -81,8 +82,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .spectrogram {
@@ -434,7 +440,7 @@ body {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   font-size: 16px;
   color: #00d4ff;
   font-weight: 600;
@@ -869,7 +875,8 @@ body {
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -1089,7 +1096,7 @@ body {
 /* Audio Controls */
 .audio-buttons {
   display: grid;
-    grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -1173,17 +1180,29 @@ body {
 }
 
 .toast-success {
-  background: linear-gradient(135deg, rgba(14, 77, 129, 0.2) 0%, rgba(5, 150, 105, 0.25) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(14, 77, 129, 0.2) 0%,
+    rgba(5, 150, 105, 0.25) 100%
+  );
   border-left: 4px solid #10b981;
 }
 
 .toast-error {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.25) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.2) 0%,
+    rgba(220, 38, 38, 0.25) 100%
+  );
   border-left: 4px solid #ef4444;
 }
 
 .toast-info {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.25) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.2) 0%,
+    rgba(37, 99, 235, 0.25) 100%
+  );
   border-left: 4px solid #7dd3fc;
 }
 
@@ -1715,6 +1734,11 @@ body {
   outline-offset: 2px;
 }
 
+.scale-selector-mini option {
+  background-color: #1a1f3a; /* Uses your header's dark blue color */
+  color: #e0e0e0; /* Ensures text remains visible */
+}
+
 /* Performance optimizations */
 .main-content {
   contain: layout style;
@@ -1752,7 +1776,11 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(124, 58, 237, 0.05) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(139, 92, 246, 0.1) 0%,
+    rgba(124, 58, 237, 0.05) 100%
+  );
   border-radius: 12px;
   pointer-events: none;
   z-index: -1;
@@ -1781,7 +1809,11 @@ body {
 .ai-controls-info-compact {
   text-align: center;
   padding: 8px 15px;
-  background: linear-gradient(90deg, rgba(139, 92, 246, 0.1), rgba(124, 58, 237, 0.1));
+  background: linear-gradient(
+    90deg,
+    rgba(139, 92, 246, 0.1),
+    rgba(124, 58, 237, 0.1)
+  );
   border-radius: 6px;
   margin-top: 15px;
   border: 1px solid rgba(139, 92, 246, 0.2);

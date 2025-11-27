@@ -18,6 +18,45 @@ function CineController({
   isPlayingOriginal,
   comparisonMode = null,
 }) {
+  
+  // Helper to determine button text based on mode
+  const getToggleLabel = () => {
+    if (comparisonMode === "equalizer_vs_ai") {
+      // Primary: Equalizer, Secondary: AI
+      return isPlayingOriginal ? "🔄 AI" : "🔄 EQ";
+    }
+    if (comparisonMode === "ai") {
+      // Primary: Original, Secondary: AI
+      return isPlayingOriginal ? "🔄 AI" : "🔄 ORG";
+    }
+    // Default: Primary: Original, Secondary: Equalizer
+    return isPlayingOriginal ? "🔄 EQ" : "🔄 ORG";
+  };
+
+  // Helper to determine tooltip text
+  const getToggleTitle = () => {
+    if (comparisonMode === "equalizer_vs_ai") {
+      return isPlayingOriginal ? "Switch to AI Output" : "Switch to Equalizer Output";
+    }
+    if (comparisonMode === "ai") {
+      return isPlayingOriginal ? "Switch to AI Output" : "Switch to Original Input";
+    }
+    return isPlayingOriginal ? "Switch to Equalized Signal" : "Switch to Original Signal";
+  };
+
+  // Helper to determine status text
+  const getStatusText = () => {
+    if (!onToggleAudio) return null;
+
+    if (comparisonMode === "equalizer_vs_ai") {
+      return isPlayingOriginal ? "(Equalizer)" : "(AI)";
+    }
+    if (comparisonMode === "ai") {
+      return isPlayingOriginal ? "(Original)" : "(AI)";
+    }
+    return isPlayingOriginal ? "(Original)" : "(Equalized)";
+  };
+
   return (
     <div className="cine-controller">
       <div className="controls-row">
@@ -46,23 +85,9 @@ function CineController({
                 !isPlayingOriginal ? "active" : ""
               }`}
               onClick={onToggleAudio}
-              title={
-                comparisonMode === "equalizer_vs_ai"
-                  ? isPlayingOriginal
-                    ? "Switch to AI"
-                    : "Switch to Equalizer"
-                  : isPlayingOriginal
-                  ? "Switch to Equalized"
-                  : "Switch to Original"
-              }
+              title={getToggleTitle()}
             >
-              {comparisonMode === "equalizer_vs_ai"
-                ? isPlayingOriginal
-                  ? "🔄 AI"
-                  : "🔄 EQ"
-                : isPlayingOriginal
-                ? "🔄 EQ"
-                : "🔄 ORG"}
+              {getToggleLabel()}
             </button>
           )}
         </div>
@@ -78,13 +103,7 @@ function CineController({
             <span
               style={{ marginLeft: "10px", fontSize: "12px", opacity: 0.8 }}
             >
-              {comparisonMode === "equalizer_vs_ai"
-                ? isPlayingOriginal
-                  ? "(Equalizer)"
-                  : "(AI)"
-                : isPlayingOriginal
-                ? "(Original)"
-                : "(Equalized)"}
+              {getStatusText()}
             </span>
           )}
         </div>

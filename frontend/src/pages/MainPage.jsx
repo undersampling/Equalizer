@@ -988,6 +988,7 @@ const handleSliderChange = (sliderId, newValue) => {
             duration={inputSignal.duration}
             onToggleAudio={handleToggleAudio}
             isPlayingOriginal={!isPlayingSecondary}
+            comparisonMode={comparisonMode}
           />
         )}
 

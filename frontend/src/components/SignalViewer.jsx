@@ -317,9 +317,19 @@ function SignalViewer({
   const handleWheel = (e) => {
     if (!onZoomChange || !onPanChange || !signal || !canvasRef.current) return;
 
-    e.preventDefault();
-
+    // Only allow wheel zoom when mouse is over the canvas (signal viewer)
     const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
+    
+    // Check if mouse is within canvas bounds
+    if (mouseX < rect.left || mouseX > rect.right || 
+        mouseY < rect.top || mouseY > rect.bottom) {
+      return; // Mouse is not over the signal viewer
+    }
+
+    e.preventDefault();
     const totalDuration = signal.duration;
     const leftMargin = 60;
     const plotWidth = canvas.width - leftMargin;
@@ -328,9 +338,9 @@ function SignalViewer({
     const zoomDelta = e.deltaY < 0 ? zoomFactor : 1 / zoomFactor;
     const newZoom = Math.max(1, Math.min(100, zoom * zoomDelta));
 
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left - leftMargin;
-    const mouseXFraction = Math.max(0, Math.min(1, mouseX / plotWidth));
+    // Calculate mouse position relative to canvas for zoom centering
+    const mouseXRelative = e.clientX - rect.left - leftMargin;
+    const mouseXFraction = Math.max(0, Math.min(1, mouseXRelative / plotWidth));
 
     const oldWindowDuration = totalDuration / zoom;
     const oldMaxPanTime = Math.max(0, totalDuration - oldWindowDuration);
@@ -358,6 +368,7 @@ function SignalViewer({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Attach wheel listener to canvas - it will only fire when mouse is over the canvas
     const onWheel = (e) => {
       if (handleWheelRef.current) {
         handleWheelRef.current(e);

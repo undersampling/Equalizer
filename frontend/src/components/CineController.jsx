@@ -16,6 +16,7 @@ function CineController({
   duration,
   onToggleAudio,
   isPlayingOriginal,
+  comparisonMode = null,
 }) {
   return (
     <div className="cine-controller">
@@ -46,10 +47,22 @@ function CineController({
               }`}
               onClick={onToggleAudio}
               title={
-                isPlayingOriginal ? "Switch to Equalized" : "Switch to Original"
+                comparisonMode === "equalizer_vs_ai"
+                  ? isPlayingOriginal
+                    ? "Switch to AI"
+                    : "Switch to Equalizer"
+                  : isPlayingOriginal
+                  ? "Switch to Equalized"
+                  : "Switch to Original"
               }
             >
-              {isPlayingOriginal ? "🔄 EQ" : "🔄 ORG"}
+              {comparisonMode === "equalizer_vs_ai"
+                ? isPlayingOriginal
+                  ? "🔄 AI"
+                  : "🔄 EQ"
+                : isPlayingOriginal
+                ? "🔄 EQ"
+                : "🔄 ORG"}
             </button>
           )}
         </div>
@@ -65,7 +78,13 @@ function CineController({
             <span
               style={{ marginLeft: "10px", fontSize: "12px", opacity: 0.8 }}
             >
-              ({isPlayingOriginal ? "Original" : "Equalized"})
+              {comparisonMode === "equalizer_vs_ai"
+                ? isPlayingOriginal
+                  ? "(Equalizer)"
+                  : "(AI)"
+                : isPlayingOriginal
+                ? "(Original)"
+                : "(Equalized)"}
             </span>
           )}
         </div>

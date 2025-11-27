@@ -381,16 +381,19 @@ function MainPage() {
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
         if (!audioContextRef.current)
           audioContextRef.current = new (window.AudioContext ||
             window.webkitAudioContext)();
+
         const arrayBuffer = event.target.result;
         const audioBuffer = await audioContextRef.current.decodeAudioData(
           arrayBuffer
         );
+
         const channelData = audioBuffer.getChannelData(0);
         const originalSignal = {
           data: Array.from(channelData),
@@ -398,29 +401,68 @@ function MainPage() {
           duration: audioBuffer.duration,
         };
 
+        // 1. Set Input State
         setInputSignal(originalSignal);
-        setOutputSignal(originalSignal);
         setApiSignal(originalSignal);
+
+        // Reset generic UI states
         setAiModelSignal(null);
         setAiModelFourierData(null);
         setComparisonMode(null);
         setShowAIGraphs(false);
         setHasAIStems(false);
-        setPreviewSpectrogramData(null); // CLEAR PREVIEW HERE
-
-        setSliders((prev) => prev.filter((slider) => !slider.isVoice));
+        setPreviewSpectrogramData(null);
         setCurrentTime(0);
         setIsPlaying(false);
         setIsPaused(false);
-        setZoom(1);
-        setPan(0);
-        setPlaybackSpeed(1);
-        setIsPlayingSecondary(false);
 
+        // 2. CHECK EXISTING SLIDERS
+        // We check slidersRef to get the most current values without waiting for state
+        const currentSliders = slidersRef.current.filter((s) => !s.isVoice);
+        const hasChanges = currentSliders.some(
+          (s) => Math.abs(s.value - 1.0) > 0.001
+        );
+
+        if (hasChanges) {
+          // === A. Sliders exist: PROCESS IMMEDIATELY ===
+          showToast("⏳ Processing with current sliders...", "info");
+
+          try {
+            const response = await apiService.equalize(
+              originalSignal.data, // Pass raw data directly
+              originalSignal.sampleRate,
+              currentSliders,
+              currentMode,
+              false // Full processing, not preview
+            );
+
+            const result = response.data;
+            const processedSignal = {
+              data: result.outputSignal,
+              sampleRate: result.sampleRate || originalSignal.sampleRate,
+              duration: originalSignal.duration,
+            };
+
+            setOutputSignal(processedSignal);
+            computeFourierTransform(processedSignal, "output"); // Update Output FFT
+          } catch (error) {
+            console.error(error);
+            // Fallback if API fails
+            setOutputSignal(originalSignal);
+            computeFourierTransform(originalSignal, "output");
+          }
+        } else {
+          // === B. No Sliders: Default Behavior ===
+          setOutputSignal(originalSignal);
+          computeFourierTransform(originalSignal, "output");
+        }
+
+        // 3. Always update Input FFT
         computeFourierTransform(originalSignal, "input");
-        computeFourierTransform(originalSignal, "output");
+
         showToast("✅ Audio file loaded successfully", "success");
       } catch (error) {
+        console.error(error);
         showToast("❌ Error loading file.", "error");
       }
     };

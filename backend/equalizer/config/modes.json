@@ -9,132 +9,32 @@
       "icon": "⚙️",
       "sliders": [
         {
-          "id": 1,
-          "label": "🎤 Vocals",
-          "value": 0,
-          "min": 0,
-          "max": 2,
-          "freqRanges": [
-            [
-              120,
-              240
-            ],
-            [
-              240,
-              400
-            ],
-            [
-              4000,
-              7000
-            ],
-            [
-              10000,
-              15000
-            ]
-          ]
-        },
-        {
-          "id": 2,
-          "label": "🥁 Drums",
-          "value": 2,
-          "min": 0,
-          "max": 2,
-          "freqRanges": [
-            [
-              50,
-              100
-            ],
-            [
-              120,
-              240
-            ],
-            [
-              3000,
-              7000
-            ],
-            [
-              8000,
-              12000
-            ]
-          ]
-        },
-        {
-          "id": 3,
-          "label": "🎸 Bass",
+          "id": 1764221646516,
+          "label": " Range [3658,8154]",
           "value": 1,
           "min": 0,
           "max": 2,
+          "minFreq": 3658,
+          "width": 4496,
           "freqRanges": [
             [
-              50,
-              80
-            ],
-            [
-              700,
-              1000
-            ],
-            [
-              2500,
-              3000
+              3658,
+              8154
             ]
           ]
         },
         {
-          "id": 4,
-          "label": "🎸 Guitar",
-          "value": 0,
+          "id": 1764221655364,
+          "label": "noise",
+          "value": 1,
           "min": 0,
           "max": 2,
+          "minFreq": 0,
+          "width": 5000,
           "freqRanges": [
             [
-              240,
-              500
-            ],
-            [
-              1000,
-              1500
-            ],
-            [
-              1500,
-              2500
-            ],
-            [
-              5000,
-              7000
-            ]
-          ]
-        },
-        {
-          "id": 5,
-          "label": "🎹 Piano",
-          "value": 0,
-          "min": 0,
-          "max": 2,
-          "freqRanges": [
-            [
-              80,
-              120
-            ],
-            [
-              2500,
-              3500
-            ],
-            [
-              3000,
+              0,
               5000
-            ]
-          ]
-        },
-        {
-          "id": 6,
-          "label": "🎧 Other",
-          "value": 1,
-          "min": 0,
-          "max": 2,
-          "freqRanges": [
-            [
-              100,
-              10000
             ]
           ]
         }
@@ -350,33 +250,49 @@
         {
           "id": 1,
           "label": "👨 Male Voice",
-          "value": 1.03,
+          "value": 1,
           "min": 0,
           "max": 2,
           "freqRanges": [
             [
-              85,
+              0,
               180
+            ],
+            [
+              300,
+              400
+            ],
+            [
+              550,
+              650
             ]
           ]
         },
         {
           "id": 2,
           "label": "👩 Female Voice",
-          "value": 0,
+          "value": 1,
           "min": 0,
           "max": 2,
           "freqRanges": [
             [
-              165,
+              180,
               255
+            ],
+            [
+              400,
+              540
+            ],
+            [
+              1000,
+              2000
             ]
           ]
         },
         {
           "id": 3,
           "label": "👴 Old Person",
-          "value": 2,
+          "value": 1,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -389,7 +305,7 @@
         {
           "id": 4,
           "label": "👦 Young Person",
-          "value": 0,
+          "value": 1,
           "min": 0,
           "max": 2,
           "freqRanges": [
@@ -402,5 +318,5 @@
       ]
     }
   },
-  "lastUpdated": "2025-11-27T06:51:19.159754"
+  "lastUpdated": "2025-11-27T07:34:17.884940"
 }

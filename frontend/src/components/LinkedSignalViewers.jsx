@@ -20,321 +20,245 @@ function LinkedSignalViewers({
   const [pan, setPan] = useState(0);
   const [isPlayingOriginal, setIsPlayingOriginal] = useState(true);
 
+  // Refs
   const animationRef = useRef(null);
   const lastFrameTimeRef = useRef(null);
   const accumulatedTimeRef = useRef(0);
   const audioContextRef = useRef(null);
   const audioSourceRef = useRef(null);
   const startTimeRef = useRef(0);
-  const pausedAtRef = useRef(0); // FIXED: Track where we paused
-  const animationFrameRef = useRef(null);
+  const pausedAtRef = useRef(0);
 
-  // Stop current audio source
-  const stopCurrentAudio = useCallback(() => {
+  // --- CRITICAL FIX: This function now ONLY handles Audio ---
+  // We removed the cancellation of animationRef here. 
+  // The useEffect below manages the loop lifecycle automatically.
+  const stopAudioSourceOnly = useCallback(() => {
     if (audioSourceRef.current) {
       try {
         audioSourceRef.current.stop();
       } catch (e) {
-        // Source might already be stopped
+        // Ignore errors if already stopped
       }
       audioSourceRef.current = null;
     }
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
   }, []);
 
-  // Cleanup audio on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      stopCurrentAudio();
+      stopAudioSourceOnly();
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [stopCurrentAudio]);
+  }, [stopAudioSourceOnly]);
 
-  // FIXED: Animation loop runs ALWAYS when playing (Issue #2)
+  // === MAIN ANIMATION LOOP ===
+  // This loop runs WHENEVER isPlaying is true.
   useEffect(() => {
-    if (!isPlaying || !inputSignal) {
+    if (!isPlaying) {
+      // If we stop playing, cancel the loop immediately
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
       lastFrameTimeRef.current = null;
       return;
     }
 
     const animate = (timestamp) => {
-      if (!isPlaying) return; // Stop if playing was toggled off
-
-      // Initialize timestamp
       if (lastFrameTimeRef.current === null) {
         lastFrameTimeRef.current = timestamp;
       }
-
       const deltaTime = (timestamp - lastFrameTimeRef.current) / 1000;
       lastFrameTimeRef.current = timestamp;
 
-      // FIXED: Update time immediately when playing starts (Issue #2)
+      // 1. If Audio is connected, sync to it
       if (audioSourceRef.current && audioContextRef.current) {
-        // Audio is playing - sync with audio time
-        const elapsed =
-          audioContextRef.current.currentTime - startTimeRef.current;
+        const elapsed = audioContextRef.current.currentTime - startTimeRef.current;
         accumulatedTimeRef.current = elapsed;
         setCurrentTime(elapsed);
-      } else {
-        // Visual-only playback (no audio)
+        
+        // Auto-stop at end
+        if (inputSignal && elapsed >= inputSignal.duration) {
+           handleStop(); // Define handleStop below, this works because of closure
+           return; 
+        }
+      } 
+      // 2. If Audio is momentarily disconnected (e.g. during Seek/Toggle), predict time
+      else {
         accumulatedTimeRef.current += deltaTime * playbackSpeed;
         setCurrentTime(accumulatedTimeRef.current);
-      }
-
-      // Check if reached end
-      if (accumulatedTimeRef.current >= inputSignal.duration) {
-        accumulatedTimeRef.current = inputSignal.duration;
-        setCurrentTime(inputSignal.duration);
-        stopCurrentAudio();
-        setIsPlaying(false);
-        setIsPaused(false);
-        pausedAtRef.current = 0;
-        return;
       }
 
       animationRef.current = requestAnimationFrame(animate);
     };
 
+    // Start the loop
     animationRef.current = requestAnimationFrame(animate);
 
+    // Cleanup: Cancel loop when isPlaying becomes false
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isPlaying, playbackSpeed, inputSignal, stopCurrentAudio]);
+  }, [isPlaying, playbackSpeed, inputSignal]); // Removed stopAudioSourceOnly dependency to avoid resets
 
+  // === PLAY ===
   const handlePlay = useCallback(() => {
     if (!inputSignal || !outputSignal) return;
 
     const signalToPlay = isPlayingOriginal ? inputSignal : outputSignal;
-
-    // FIXED: Resume from paused position (Issue #3)
     const startOffset = isPaused ? pausedAtRef.current : 0;
 
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext ||
-        window.webkitAudioContext)();
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
     }
+    const ctx = audioContextRef.current;
+    if (ctx.state === 'suspended') ctx.resume();
 
-    const audioContext = audioContextRef.current;
+    const buffer = ctx.createBuffer(1, signalToPlay.data.length, signalToPlay.sampleRate);
+    buffer.getChannelData(0).set(signalToPlay.data);
 
-    // Create audio buffer
-    const audioBuffer = audioContext.createBuffer(
-      1,
-      signalToPlay.data.length,
-      signalToPlay.sampleRate
-    );
-    const channelData = audioBuffer.getChannelData(0);
-
-    for (let i = 0; i < signalToPlay.data.length; i++) {
-      channelData[i] = signalToPlay.data[i];
-    }
-
-    // Create and start source
-    const source = audioContext.createBufferSource();
-    source.buffer = audioBuffer;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
     source.playbackRate.value = playbackSpeed;
-    source.connect(audioContext.destination);
-
-    // FIXED: Start from paused position (Issue #3)
+    source.connect(ctx.destination);
     source.start(0, startOffset);
 
-    // Handle end of playback
-    source.onended = () => {
-      if (isPlaying) {
-        stopCurrentAudio();
-        setIsPlaying(false);
-        setIsPaused(false);
-        setCurrentTime(inputSignal.duration);
-        pausedAtRef.current = 0;
-        accumulatedTimeRef.current = inputSignal.duration;
-      }
-    };
-
     audioSourceRef.current = source;
-    startTimeRef.current = audioContext.currentTime - startOffset;
+    startTimeRef.current = ctx.currentTime - startOffset;
 
-    // FIXED: Set accumulated time to start offset (Issue #2)
     accumulatedTimeRef.current = startOffset;
     setCurrentTime(startOffset);
-
-    setIsPlaying(true);
-    setIsPaused(false);
     lastFrameTimeRef.current = null;
-  }, [
-    inputSignal,
-    outputSignal,
-    isPlayingOriginal,
-    playbackSpeed,
-    isPaused,
-    isPlaying,
-    stopCurrentAudio,
-  ]);
 
+    setIsPaused(false);
+    setIsPlaying(true); // This triggers the useEffect Loop
+  }, [inputSignal, outputSignal, isPlayingOriginal, playbackSpeed, isPaused]);
+
+  // === PAUSE ===
   const handlePause = useCallback(() => {
     if (!isPlaying) return;
 
-    // FIXED: Calculate and save current position (Issue #3)
+    // Capture time
     if (audioSourceRef.current && audioContextRef.current) {
-      const elapsed =
-        audioContextRef.current.currentTime - startTimeRef.current;
+      const elapsed = audioContextRef.current.currentTime - startTimeRef.current;
       pausedAtRef.current = elapsed;
-      accumulatedTimeRef.current = elapsed;
       setCurrentTime(elapsed);
     } else {
       pausedAtRef.current = accumulatedTimeRef.current;
     }
 
-    stopCurrentAudio();
-    setIsPlaying(false);
-    setIsPaused(true); // FIXED: Set paused state to true (Issue #3)
-    lastFrameTimeRef.current = null;
-  }, [isPlaying, stopCurrentAudio]);
+    stopAudioSourceOnly(); // Stop sound
+    setIsPlaying(false);   // Stop loop
+    setIsPaused(true);
+  }, [isPlaying, stopAudioSourceOnly]);
 
+  // === STOP ===
   const handleStop = useCallback(() => {
-    stopCurrentAudio();
+    stopAudioSourceOnly();
     setIsPlaying(false);
     setIsPaused(false);
     setCurrentTime(0);
     setPan(0);
-    lastFrameTimeRef.current = null;
+    pausedAtRef.current = 0;
     accumulatedTimeRef.current = 0;
-    pausedAtRef.current = 0; // FIXED: Reset pause position
-  }, [stopCurrentAudio]);
+  }, [stopAudioSourceOnly]);
 
-  const handleSpeedChange = useCallback(
-    (e) => {
-      const newSpeed = parseFloat(e.target.value);
-      setPlaybackSpeed(newSpeed);
+  // === SEEK (Fix for "Pointer Stops") ===
+  const handleSeek = useCallback((seekTime) => {
+    // Always update visual immediately
+    setCurrentTime(seekTime);
+    pausedAtRef.current = seekTime;
+    accumulatedTimeRef.current = seekTime;
 
-      // Update playback speed if currently playing
-      if (isPlaying && audioSourceRef.current) {
-        audioSourceRef.current.playbackRate.value = newSpeed;
-      }
-    },
-    [isPlaying]
-  );
+    if (isPlaying) {
+        // 1. Stop Audio ONLY (Loop keeps running)
+        stopAudioSourceOnly();
 
-  // Toggle between original and equalized audio during playback
+        // 2. Start New Audio
+        setTimeout(() => {
+            const signalToPlay = isPlayingOriginal ? inputSignal : outputSignal;
+            if (!audioContextRef.current) return;
+            
+            const ctx = audioContextRef.current;
+            const buffer = ctx.createBuffer(1, signalToPlay.data.length, signalToPlay.sampleRate);
+            buffer.getChannelData(0).set(signalToPlay.data);
+
+            const source = ctx.createBufferSource();
+            source.buffer = buffer;
+            source.playbackRate.value = playbackSpeed;
+            source.connect(ctx.destination);
+            source.start(0, seekTime);
+
+            audioSourceRef.current = source;
+            startTimeRef.current = ctx.currentTime - seekTime;
+            
+            // Reset frame timer to avoid jumps
+            lastFrameTimeRef.current = null;
+        }, 10);
+    } else {
+        setIsPaused(true);
+    }
+  }, [isPlaying, isPlayingOriginal, inputSignal, outputSignal, playbackSpeed, stopAudioSourceOnly]);
+
+  // === TOGGLE SOURCE (Fix for "Pointer Stops") ===
   const handleToggleAudioSource = useCallback(() => {
     if (!inputSignal || !outputSignal) return;
-
+    
     const wasPlaying = isPlaying;
     const newIsPlayingOriginal = !isPlayingOriginal;
-
-    // FIXED: Save current position before switching (Issue #3)
-    let currentPosition = pausedAtRef.current;
+    
+    // 1. Calculate current position
+    let currentPos = currentTime;
     if (wasPlaying && audioSourceRef.current && audioContextRef.current) {
-      currentPosition =
-        audioContextRef.current.currentTime - startTimeRef.current;
-    } else if (!wasPlaying) {
-      currentPosition = currentTime;
+        currentPos = audioContextRef.current.currentTime - startTimeRef.current;
     }
+    pausedAtRef.current = currentPos;
+    setCurrentTime(currentPos);
 
-    // Stop current playback if playing
-    if (wasPlaying) {
-      stopCurrentAudio();
-    }
+    // 2. Stop Audio (Loop continues if isPlaying is true)
+    if (wasPlaying) stopAudioSourceOnly();
 
-    // Switch to the other signal
+    // 3. Swap Mode
     setIsPlayingOriginal(newIsPlayingOriginal);
-    pausedAtRef.current = currentPosition;
-    accumulatedTimeRef.current = currentPosition;
-    setCurrentTime(currentPosition);
 
-    // Resume playback if it was playing
+    // 4. Restart Audio
     if (wasPlaying) {
-      setIsPaused(true); // Mark as paused before resuming
-      setTimeout(() => {
-        const signalToPlay = newIsPlayingOriginal ? inputSignal : outputSignal;
-        const startOffset = currentPosition;
+        setTimeout(() => {
+             const signalToPlay = newIsPlayingOriginal ? inputSignal : outputSignal;
+             if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+             const ctx = audioContextRef.current;
+             if (ctx.state === 'suspended') ctx.resume();
 
-        if (!audioContextRef.current) {
-          audioContextRef.current = new (window.AudioContext ||
-            window.webkitAudioContext)();
-        }
+             const buffer = ctx.createBuffer(1, signalToPlay.data.length, signalToPlay.sampleRate);
+             buffer.getChannelData(0).set(signalToPlay.data);
 
-        const audioContext = audioContextRef.current;
+             const source = ctx.createBufferSource();
+             source.buffer = buffer;
+             source.playbackRate.value = playbackSpeed;
+             source.connect(ctx.destination);
+             source.start(0, currentPos);
 
-        const audioBuffer = audioContext.createBuffer(
-          1,
-          signalToPlay.data.length,
-          signalToPlay.sampleRate
-        );
-        const channelData = audioBuffer.getChannelData(0);
-
-        for (let i = 0; i < signalToPlay.data.length; i++) {
-          channelData[i] = signalToPlay.data[i];
-        }
-
-        const source = audioContext.createBufferSource();
-        source.buffer = audioBuffer;
-        source.playbackRate.value = playbackSpeed;
-        source.connect(audioContext.destination);
-
-        source.start(0, startOffset);
-
-        source.onended = () => {
-          stopCurrentAudio();
-          setIsPlaying(false);
-          setIsPaused(false);
-          setCurrentTime(inputSignal.duration);
-          pausedAtRef.current = 0;
-        };
-
-        audioSourceRef.current = source;
-        startTimeRef.current = audioContext.currentTime - startOffset;
-        accumulatedTimeRef.current = startOffset;
-
-        setIsPlaying(true);
-        setIsPaused(false);
-        lastFrameTimeRef.current = null;
-      }, 50);
+             audioSourceRef.current = source;
+             startTimeRef.current = ctx.currentTime - currentPos;
+             lastFrameTimeRef.current = null;
+        }, 20);
     }
-  }, [
-    inputSignal,
-    outputSignal,
-    isPlaying,
-    isPlayingOriginal,
-    currentTime,
-    playbackSpeed,
-    stopCurrentAudio,
-  ]);
+  }, [inputSignal, outputSignal, isPlaying, isPlayingOriginal, currentTime, playbackSpeed, stopAudioSourceOnly]);
 
-  const handleZoomIn = useCallback(() => {
-    setZoom((prev) => Math.min(prev * 1.2, 200));
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    setZoom((prev) => Math.max(prev / 1.2, 1));
-  }, []);
-
-  const handleReset = useCallback(() => {
-    setZoom(1);
-    setPan(0);
-    setCurrentTime(0);
-    accumulatedTimeRef.current = 0;
-    pausedAtRef.current = 0; // FIXED: Reset pause position
-  }, []);
-
-  const handlePanChange = useCallback(
-    (newPan) => {
-      if (!isPlaying) {
-        setPan(newPan);
-      }
-    },
-    [isPlaying]
-  );
-
-  const handleZoomChange = useCallback((newZoom) => {
-    setZoom(newZoom);
-  }, []);
+  // Helpers
+  const handleSpeedChange = (e) => {
+    const s = parseFloat(e.target.value);
+    setPlaybackSpeed(s);
+    if (audioSourceRef.current) audioSourceRef.current.playbackRate.value = s;
+  };
+  const handleZoomIn = () => setZoom(z => Math.min(z * 1.2, 200));
+  const handleZoomOut = () => setZoom(z => Math.max(z / 1.2, 1));
+  const handleReset = () => { setZoom(1); setPan(0); setCurrentTime(0); handleStop(); };
+  const handlePanChange = (p) => { if (!isPlaying) setPan(p); };
 
   return (
     <div className="linked-viewers-container">
@@ -372,7 +296,8 @@ function LinkedSignalViewers({
           zoom={zoom}
           pan={pan}
           onPanChange={handlePanChange}
-          onZoomChange={handleZoomChange}
+          onZoomChange={setZoom}
+          onSeek={handleSeek}
           isCineMode={true}
         />
 
@@ -384,7 +309,8 @@ function LinkedSignalViewers({
           zoom={zoom}
           pan={pan}
           onPanChange={handlePanChange}
-          onZoomChange={handleZoomChange}
+          onZoomChange={setZoom}
+          onSeek={handleSeek}
           isCineMode={true}
         />
 
@@ -397,7 +323,8 @@ function LinkedSignalViewers({
             zoom={zoom}
             pan={pan}
             onPanChange={handlePanChange}
-            onZoomChange={handleZoomChange}
+            onZoomChange={setZoom}
+            onSeek={handleSeek}
             isCineMode={true}
           />
         )}

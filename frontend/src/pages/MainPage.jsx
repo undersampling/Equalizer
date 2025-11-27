@@ -484,82 +484,86 @@ function MainPage() {
 
   // --- Audio Playback Logic ---
   const playAudioFromTime = useCallback(
-    (startTime, useSecondarySignal = false) => {
-      let signalToPlay;
-      if (useSecondarySignal) {
-        if (comparisonMode === "ai") signalToPlay = aiModelSignal;
-        else if (comparisonMode === "slider")
-          signalToPlay =
-            allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
-        else if (comparisonMode === "equalizer_vs_ai")
-          signalToPlay = aiModelSignal;
-        else signalToPlay = outputSignal;
-      } else {
-        if (comparisonMode === "equalizer_vs_ai")
-          signalToPlay =
-            allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
-        else signalToPlay = inputSignal;
-      }
+  (startTime, useSecondarySignal = false) => {
+    let signalToPlay;
+    if (useSecondarySignal) {
+      if (comparisonMode === "ai") signalToPlay = aiModelSignal;
+      else if (comparisonMode === "slider")
+        signalToPlay = allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
+      else if (comparisonMode === "equalizer_vs_ai")
+        signalToPlay = aiModelSignal;
+      else signalToPlay = outputSignal;
+    } else {
+      if (comparisonMode === "equalizer_vs_ai")
+        signalToPlay = allSlidersAtUnity() && inputSignal ? inputSignal : outputSignal;
+      else signalToPlay = inputSignal;
+    }
 
-      if (!signalToPlay || !signalToPlay.data) return;
-      if (!audioContextRef.current)
-        audioContextRef.current = new (window.AudioContext ||
-          window.webkitAudioContext)();
-      const audioContext = audioContextRef.current;
+    if (!signalToPlay || !signalToPlay.data) return;
+    
+    if (!audioContextRef.current)
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    
+    const audioContext = audioContextRef.current;
 
-      if (audioSourceRef.current) {
-        isStoppedManuallyRef.current = true;
-        try {
-          audioSourceRef.current.stop();
-        } catch (e) {}
-      }
+    // Resume context if suspended
+    if (audioContext.state === 'suspended') {
+      audioContext.resume();
+    }
 
-      const audioBuffer = audioContext.createBuffer(
-        1,
-        signalToPlay.data.length,
-        signalToPlay.sampleRate
-      );
-      const channelData = audioBuffer.getChannelData(0);
-      for (let i = 0; i < signalToPlay.data.length; i++) {
-        channelData[i] = signalToPlay.data[i];
-      }
+    // Stop any existing audio
+    if (audioSourceRef.current) {
+      isStoppedManuallyRef.current = true;
+      try {
+        audioSourceRef.current.stop();
+      } catch (e) {}
+    }
 
-      audioSourceRef.current = audioContext.createBufferSource();
-      audioSourceRef.current.buffer = audioBuffer;
-      audioSourceRef.current.playbackRate.value = playbackSpeed;
-      audioSourceRef.current.connect(audioContext.destination);
+    const audioBuffer = audioContext.createBuffer(
+      1,
+      signalToPlay.data.length,
+      signalToPlay.sampleRate
+    );
+    const channelData = audioBuffer.getChannelData(0);
+    for (let i = 0; i < signalToPlay.data.length; i++) {
+      channelData[i] = signalToPlay.data[i];
+    }
 
-      isStoppedManuallyRef.current = false;
-      audioSourceRef.current.start(0, startTime);
+    audioSourceRef.current = audioContext.createBufferSource();
+    audioSourceRef.current.buffer = audioBuffer;
+    audioSourceRef.current.playbackRate.value = playbackSpeed;
+    audioSourceRef.current.connect(audioContext.destination);
 
-      setCurrentTime(startTime);
-      setIsPlaying(true);
-      setIsPaused(false);
-      setIsPlayingSecondary(useSecondarySignal);
+    isStoppedManuallyRef.current = false;
+    audioSourceRef.current.start(0, startTime);
 
-      audioSourceRef.current.onended = () => {
-        if (!isStoppedManuallyRef.current) {
-          if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-            animationFrameRef.current = null;
-          }
-          setIsPlaying(false);
-          setIsPaused(false);
-          setCurrentTime(0);
+    // CRITICAL FIX: Set currentTime here for animation sync
+    setCurrentTime(startTime);
+    setIsPlaying(true);
+    setIsPaused(false);
+    setIsPlayingSecondary(useSecondarySignal);
+
+    audioSourceRef.current.onended = () => {
+      if (!isStoppedManuallyRef.current) {
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
         }
-      };
-    },
-    [
-      playbackSpeed,
-      comparisonMode,
-      inputSignal,
-      outputSignal,
-      aiModelSignal,
-      sliders,
-      allSlidersAtUnity,
-    ]
-  );
-
+        setIsPlaying(false);
+        setIsPaused(false);
+        setCurrentTime(inputSignal?.duration || 0);
+      }
+    };
+  },
+  [
+    playbackSpeed,
+    comparisonMode,
+    inputSignal,
+    outputSignal,
+    aiModelSignal,
+    allSlidersAtUnity,
+  ]
+);
   const playAudio = useCallback(
     (useSecondarySignal = false) => {
       playAudioFromTime(currentTime, useSecondarySignal);
@@ -568,22 +572,30 @@ function MainPage() {
   );
   const handlePlay = () => playAudio(isPlayingSecondary);
   const handlePause = () => {
-    if (isPlaying) {
-      isStoppedManuallyRef.current = true;
-      if (audioSourceRef.current) {
-        try {
-          audioSourceRef.current.stop();
-        } catch (e) {}
-        audioSourceRef.current = null;
-      }
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-      setIsPlaying(false);
-      setIsPaused(true);
+  if (isPlaying) {
+    // CRITICAL FIX: Capture current audio time before stopping
+    if (audioSourceRef.current && audioContextRef.current) {
+      // Calculate current position based on when audio started
+      const audioStartTime = audioContextRef.current.currentTime - (currentTime / playbackSpeed);
+      const actualCurrentTime = audioContextRef.current.currentTime - audioStartTime;
+      setCurrentTime(actualCurrentTime); // Update to exact position
     }
-  };
+
+    isStoppedManuallyRef.current = true;
+    if (audioSourceRef.current) {
+      try {
+        audioSourceRef.current.stop();
+      } catch (e) {}
+      audioSourceRef.current = null;
+    }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    setIsPlaying(false);
+    setIsPaused(true);
+  }
+};
   const handleStop = () => {
     isStoppedManuallyRef.current = true;
     if (audioSourceRef.current) {
@@ -601,30 +613,38 @@ function MainPage() {
     setCurrentTime(0);
   };
   const handleSeek = useCallback(
-    (seekTime) => {
-      if (!inputSignal) return;
-      if (isPlaying) {
-        if (audioSourceRef.current) {
-          isStoppedManuallyRef.current = true;
-          try {
-            audioSourceRef.current.stop();
-          } catch (e) {}
-          audioSourceRef.current = null;
-        }
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-          animationFrameRef.current = null;
-        }
-        setTimeout(() => {
-          playAudioFromTime(seekTime, isPlayingSecondary);
-        }, 10);
-      } else {
-        setCurrentTime(seekTime);
-        setIsPaused(true);
+  (seekTime) => {
+    if (!inputSignal) return;
+
+    // CRITICAL FIX: Always update currentTime immediately
+    setCurrentTime(seekTime);
+
+    if (isPlaying) {
+      // Stop current audio and animation
+      if (audioSourceRef.current) {
+        isStoppedManuallyRef.current = true;
+        try {
+          audioSourceRef.current.stop();
+        } catch (e) {}
+        audioSourceRef.current = null;
       }
-    },
-    [inputSignal, isPlaying, isPlayingSecondary, playAudioFromTime]
-  );
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+
+      // CRITICAL FIX: Force animation restart by toggling isPlaying
+      setIsPlaying(false);
+      setTimeout(() => {
+        setIsPlaying(true); // This will trigger the useEffect to restart animation
+        playAudioFromTime(seekTime, isPlayingSecondary);
+      }, 10);
+    } else {
+      setIsPaused(true);
+    }
+  },
+  [inputSignal, isPlaying, isPlayingSecondary, playAudioFromTime]
+);
 
   const handleSpeedChange = (e) => {
     const newSpeed = parseFloat(e.target.value);
@@ -639,33 +659,82 @@ function MainPage() {
     setPan(0);
   };
   const handleToggleAudio = () => {
-    const newIsSecondary = !isPlayingSecondary;
-    if (isPlaying) playAudioFromTime(currentTime, newIsSecondary);
-    else setIsPlayingSecondary(newIsSecondary);
-  };
+  const newIsSecondary = !isPlayingSecondary;
+  
+  if (isPlaying) {
+    // CRITICAL FIX: Capture current time before stopping
+    let currentPos = currentTime;
+    if (audioSourceRef.current && audioContextRef.current) {
+      // More accurate time calculation
+      const now = audioContextRef.current.currentTime;
+      // Estimate start time based on current position and playback speed
+      const estimatedStartTime = now - (currentTime / playbackSpeed);
+      currentPos = (now - estimatedStartTime) * playbackSpeed;
+      setCurrentTime(currentPos);
+    }
+
+    // Stop current audio
+    if (audioSourceRef.current) {
+      isStoppedManuallyRef.current = true;
+      try {
+        audioSourceRef.current.stop();
+      } catch (e) {}
+      audioSourceRef.current = null;
+    }
+
+    // Update secondary signal state
+    setIsPlayingSecondary(newIsSecondary);
+
+    // CRITICAL FIX: Force animation restart
+    setIsPlaying(false);
+    setTimeout(() => {
+      setIsPlaying(true); // This triggers useEffect to restart animation
+      playAudioFromTime(currentPos, newIsSecondary);
+    }, 10);
+  } else {
+    setIsPlayingSecondary(newIsSecondary);
+  }
+};
 
   useEffect(() => {
-    if (!isPlaying || !inputSignal || !audioContextRef.current) return;
-    const initialTime = currentTime;
-    const startTime = audioContextRef.current.currentTime;
-    const animate = () => {
-      if (!audioContextRef.current || !isPlaying) return;
-      const now = audioContextRef.current.currentTime;
-      const timeElapsed = now - startTime;
-      const newTime = initialTime + timeElapsed * playbackSpeed;
-      if (newTime <= inputSignal.duration) {
-        setCurrentTime(newTime);
-        animationFrameRef.current = requestAnimationFrame(animate);
-      } else {
-        handleStop();
-      }
-    };
-    animationFrameRef.current = requestAnimationFrame(animate);
-    return () => {
-      if (animationFrameRef.current)
-        cancelAnimationFrame(animationFrameRef.current);
-    };
-  }, [isPlaying, inputSignal, playbackSpeed]);
+  if (!isPlaying || !inputSignal || !audioContextRef.current) {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    return;
+  }
+
+  // Store the initial state for this animation session
+  const sessionStartTime = audioContextRef.current.currentTime;
+  const sessionInitialTime = currentTime;
+
+  const animate = () => {
+    if (!audioContextRef.current || !isPlaying) {
+      return;
+    }
+
+    const now = audioContextRef.current.currentTime;
+    const audioElapsed = now - sessionStartTime;
+    const newTime = sessionInitialTime + audioElapsed * playbackSpeed;
+
+    if (newTime <= inputSignal.duration) {
+      setCurrentTime(newTime);
+      animationFrameRef.current = requestAnimationFrame(animate);
+    } else {
+      handleStop();
+    }
+  };
+
+  animationFrameRef.current = requestAnimationFrame(animate);
+
+  return () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+  };
+}, [isPlaying, inputSignal, playbackSpeed, currentTime]);
 
   useEffect(() => {
     if (apiSignal) computeFourierTransform(apiSignal, "input", true);

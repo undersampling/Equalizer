@@ -57,9 +57,8 @@ function AIModelSection({ mode, inputSignal, outputSignal, sliders, onModelResul
             min: 0,
             max: 2,
             voiceKey: voiceKey,
-            isVoice: true,
-            // Add any other properties that original sliders have for consistency
-            freqRanges: null // Voice sliders don't have frequency ranges
+            isVoice: true, // This flag is critical for logic separation in MainPage
+            freqRanges: null
           }));
           onVoiceGainsUpdate(voiceSliders);
         }

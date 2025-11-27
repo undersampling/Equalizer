@@ -203,6 +203,7 @@ function MainPage() {
       if (!isPreview) isProcessingRef.current = true;
 
       try {
+        // Ensure we ONLY send the original EQ sliders, filtering out voice sliders
         const eqSliders = slidersRef.current.filter((s) => !s.isVoice);
 
         const response = await apiService.equalize(
@@ -228,9 +229,6 @@ function MainPage() {
           };
 
           setOutputSignal(newOutputSignal);
-
-          // CRITICAL FIX: DO NOT setPreviewSpectrogramData(null) here.
-          // Letting the preview data persist prevents the "Loading..." flash/glitch
 
           // Update FFT silently
           if (fftTimeoutRef.current) clearTimeout(fftTimeoutRef.current);
@@ -297,41 +295,55 @@ function MainPage() {
     setSliders(updatedSliders);
     slidersRef.current = updatedSliders;
 
+    // Determine what kind of slider changed
+    const changedSlider = updatedSliders.find((s) => s.id === sliderId);
+    const isVoiceSlider = changedSlider?.isVoice;
+
     if (inputSignal && apiSignal) {
       const now = Date.now();
 
-      // 1. FAST PREVIEW (Throttled 50ms)
-      if (!(isAIMode && aiStems && currentMode !== "musical")) {
-        if (now - lastPreviewTimeRef.current > 50) {
-          applyEqualization(true); // isPreview = true
-          lastPreviewTimeRef.current = now;
-        }
-      }
+      if (isVoiceSlider) {
+        // === CLEAR PREVIEW DATA ===
+        // If we are moving a voice slider, the EQ preview data is irrelevant and causes visual glitches.
+        if (previewSpectrogramData) setPreviewSpectrogramData(null);
+        
+        // Debounce AI Processing
+        if (equalizationTimeoutRef.current) clearTimeout(equalizationTimeoutRef.current);
+        equalizationTimeoutRef.current = setTimeout(() => {
+             if (aiModelRef.current) {
+                const voiceGains = {};
+                updatedSliders.forEach((s) => {
+                  if (s.isVoice && s.voiceKey) voiceGains[s.voiceKey] = s.value;
+                });
+                aiModelRef.current.remixVoices(voiceGains);
+            }
+        }, 300);
 
-      // 2. FULL UPDATE (Debounced 300ms)
-      if (equalizationTimeoutRef.current)
-        clearTimeout(equalizationTimeoutRef.current);
-
-      equalizationTimeoutRef.current = setTimeout(() => {
-        const changedSlider = updatedSliders.find((s) => s.id === sliderId);
-
-        if (currentMode === "musical" && hasAIStems && aiModelRef.current) {
-          aiModelRef.current.remixStems();
-        }
-        if (changedSlider && changedSlider.isVoice && aiModelRef.current) {
-          const voiceGains = {};
-          updatedSliders.forEach((s) => {
-            if (s.isVoice && s.voiceKey) voiceGains[s.voiceKey] = s.value;
-          });
-          aiModelRef.current.remixVoices(voiceGains);
-        } else if (isAIMode && aiStems && currentMode !== "musical") {
-          applyAIMixing();
-        }
-
+      } else {
+        // === ORIGINAL EQ SLIDER CHANGED ===
+        // 1. Fast Preview (Equalizer Only)
         if (!(isAIMode && aiStems && currentMode !== "musical")) {
-          applyEqualization(false); // isPreview = false
+            if (now - lastPreviewTimeRef.current > 50) {
+              applyEqualization(true); // isPreview = true
+              lastPreviewTimeRef.current = now;
+            }
         }
-      }, 300);
+
+        // 2. Full Update
+        if (equalizationTimeoutRef.current) clearTimeout(equalizationTimeoutRef.current);
+        equalizationTimeoutRef.current = setTimeout(() => {
+            if (currentMode === "musical" && hasAIStems && aiModelRef.current) {
+                aiModelRef.current.remixStems();
+            } else if (isAIMode && aiStems && currentMode !== "musical") {
+                applyAIMixing();
+            }
+
+            // Only apply EQ if we aren't in a mode where EQ sliders override everything
+            if (!(isAIMode && aiStems && currentMode !== "musical")) {
+                applyEqualization(false);
+            }
+        }, 300);
+      }
     }
   };
 
@@ -373,6 +385,10 @@ function MainPage() {
     setShowAIGraphs(true);
     setHasAIStems(true);
     setComparisonMode(null);
+    
+    // Clear any stuck EQ preview data to force spectrogram to render the new AI signal
+    setPreviewSpectrogramData(null);
+
     if (aiSignal.fourierData) setAiModelFourierData(aiSignal.fourierData);
     else computeFourierTransform(aiSignal, "ai");
   };
@@ -417,49 +433,39 @@ function MainPage() {
         setIsPaused(false);
 
         // 2. CHECK EXISTING SLIDERS
-        // We check slidersRef to get the most current values without waiting for state
         const currentSliders = slidersRef.current.filter((s) => !s.isVoice);
         const hasChanges = currentSliders.some(
           (s) => Math.abs(s.value - 1.0) > 0.001
         );
 
         if (hasChanges) {
-          // === A. Sliders exist: PROCESS IMMEDIATELY ===
           showToast("⏳ Processing with current sliders...", "info");
-
           try {
             const response = await apiService.equalize(
-              originalSignal.data, // Pass raw data directly
+              originalSignal.data,
               originalSignal.sampleRate,
               currentSliders,
               currentMode,
-              false // Full processing, not preview
+              false
             );
-
             const result = response.data;
             const processedSignal = {
               data: result.outputSignal,
               sampleRate: result.sampleRate || originalSignal.sampleRate,
               duration: originalSignal.duration,
             };
-
             setOutputSignal(processedSignal);
-            computeFourierTransform(processedSignal, "output"); // Update Output FFT
+            computeFourierTransform(processedSignal, "output"); 
           } catch (error) {
             console.error(error);
-            // Fallback if API fails
             setOutputSignal(originalSignal);
             computeFourierTransform(originalSignal, "output");
           }
         } else {
-          // === B. No Sliders: Default Behavior ===
           setOutputSignal(originalSignal);
           computeFourierTransform(originalSignal, "output");
         }
-
-        // 3. Always update Input FFT
         computeFourierTransform(originalSignal, "input");
-
         showToast("✅ Audio file loaded successfully", "success");
       } catch (error) {
         console.error(error);
@@ -514,7 +520,6 @@ function MainPage() {
         signalToPlay.sampleRate
       );
       const channelData = audioBuffer.getChannelData(0);
-      // Safe copy
       for (let i = 0; i < signalToPlay.data.length; i++) {
         channelData[i] = signalToPlay.data[i];
       }
@@ -664,7 +669,6 @@ function MainPage() {
 
   useEffect(() => {
     if (apiSignal) computeFourierTransform(apiSignal, "input", true);
-    // FIX: Use outputSignal to show changes in FFT
     if (outputSignal) computeFourierTransform(outputSignal, "output", true);
     if (aiModelSignal) computeFourierTransform(aiModelSignal, "ai", true);
   }, [fftScale]);
@@ -726,6 +730,28 @@ function MainPage() {
     };
   }, []);
 
+  // === SPECTROGRAM PREVIEW LOGIC FIX ===
+  // This function decides if we should pass the Equalizer Preview Data to a specific graph.
+  // We ONLY want to pass it if the graph is currently displaying the Equalizer Output.
+  const getOverrideData = (type) => {
+      if (!previewSpectrogramData) return null;
+
+      // Logic: 
+      // 1. If mode is 'equalizer_vs_ai', "input" graph shows EQ, "output" graph shows AI.
+      //    Therefore, pass preview ONLY to "input".
+      // 2. If mode is 'ai' (Original vs AI), neither shows EQ. Pass NULL.
+      // 3. If mode is normal (Original vs EQ), "output" graph shows EQ. Pass preview to "output".
+
+      if (comparisonMode === "equalizer_vs_ai") {
+          return type === "input" ? previewSpectrogramData : null; 
+      } else if (comparisonMode === "ai") {
+          return null;
+      } else {
+          // Default comparison (slider or null): Output is Equalizer
+          return type === "output" ? previewSpectrogramData : null;
+      }
+  };
+
   return (
     <div className="App">
       {toast.visible && (
@@ -740,7 +766,6 @@ function MainPage() {
         apiSignal={apiSignal}
         onModeChange={handleModeChange}
         onFileUpload={handleFileUpload}
-        // === FIXED: RESTORED onReloadConfig LOGIC ===
         onReloadConfig={async () => {
           setIsLoadingModes(true);
           try {
@@ -762,17 +787,13 @@ function MainPage() {
             setIsLoadingModes(false);
           }
         }}
-        // === FIXED: RESTORED onResetDefaults LOGIC ===
         onResetDefaults={async () => {
           clearCache();
           setIsLoadingModes(true);
           try {
             setPreviewSpectrogramData(null);
-            // 1. Tell backend to reset
             await apiService.resetModes();
-            // 2. Clear local storage
             clearSettings(currentMode);
-            // 3. Re-fetch clean config
             const configs = await getAllModeConfigs(null, true);
             setModeConfigs(configs);
             if (configs[currentMode]) {
@@ -782,7 +803,6 @@ function MainPage() {
               slidersRef.current = [...newBaseSliders, ...currentVoiceSliders];
             }
             showToast("✅ Reset", "success");
-            // 4. Force a Full Equalization update (not preview) with new defaults
             if (inputSignal && apiSignal)
               setTimeout(() => applyEqualization(false), 100);
           } catch (e) {
@@ -791,7 +811,6 @@ function MainPage() {
             setIsLoadingModes(false);
           }
         }}
-        // === FIXED: RESTORED onLoadSettings LOGIC ===
         onLoadSettings={(s) => {
           setCurrentMode(s.mode);
           const currentVoiceSliders = sliders.filter(
@@ -939,13 +958,14 @@ function MainPage() {
                     <Spectrogram
                       signal={getSignalByType("input")}
                       title={getTitleByType("input") + " Spectrogram"}
+                      overrideData={getOverrideData("input")}
                       visible={showSpectrograms}
                       compact={true}
                     />
                     <Spectrogram
                       signal={getSignalByType("output")}
-                      overrideData={previewSpectrogramData}
                       title={getTitleByType("output") + " Spectrogram"}
+                      overrideData={getOverrideData("output")}
                       visible={showSpectrograms}
                       compact={true}
                     />

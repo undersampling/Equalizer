@@ -101,8 +101,7 @@ We have integrated Deep Learning models to compare classical DSP equalization ag
 
 ```bash
 # Clone the repository
-git clone [https://github.com/signal-equalizer.git](https://github.com/signal-equalizer.git)
-cd signal-equalizer
+git clone [[https://github.com/signal-equalizer.git](https://github.com/undersampling/Equalizer.git)](https://github.com/undersampling/Equalizer.git)
 
 # Backend setup
 cd backend
@@ -112,4 +111,4 @@ python manage.py runserver
 # Frontend setup
 cd ../frontend
 npm install
-npm start
+npm run dev

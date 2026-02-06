@@ -33,22 +33,37 @@ A flexible playground for signal analysis where users have full control over the
 
 Pre-configured modes where sliders map to complex, non-continuous frequency ranges to isolate specific sound sources.
 
+---
+
 #### 1. 🎻 Musical Instruments Mode
 - Control magnitude of specific instruments in a mixed track.
 - **Targets:** Drums, Flute, Piano, Guitar (min. 4 instruments).
+
+##### 📸 Preview Image
+![Musical Instruments Mode](images/musical.png)
+
+---
 
 #### 2. 🐕 Animal Sounds Mode
 - Isolate or suppress specific animal calls in a bio-acoustic mixture.
 - **Targets:** Dog, Cat, Bird, Lion (min. 4 animals).
 
+##### 📸 Preview Image
+![Animal Sounds Mode](images/animal.png)
+
+---
+
 #### 3. 🗣️ Human Voices Mode
 - Manipulate specific voice characteristics in a crowded recording.
 - **Targets:** Male/Female, Young/Old, or specific languages.
 
-| Custom Mode Interface |
-|:---:|
-| <img src="assets/custom_mode_screenshot.png" width="600"/> |
-| *Sliders mapped to specific instruments rather than raw frequencies* |
+##### 📸 Preview Image
+![Human Voices Mode](images/human.png)
+
+---
+
+### 🎞️ Customized Modes Demo (GIF)
+![Customized Modes Demo](images/custom_mode.gif)
 
 ---
 
@@ -78,11 +93,8 @@ We have integrated Deep Learning models to compare classical DSP equalization ag
 - **Model Integration:** Pre-trained AI models integrated for 2 selected modes (e.g., Music & Voice).
 - **Performance Comparison:** Assess the clarity and isolation quality of the manual Equalizer vs. the AI Model.
 
-#### 🎥 AI Comparison Demo
-![AI Comparison Demo](assets/ai_comparison_video.gif)
-*Comparison of signal output: Classical Filters vs. AI Model.*
-
----
+#### 🎞️ AI Mode Demo (GIF)
+![AI Mode Demo](images/ai.gif)
 
 ## 🧰 Tech Stack
 
